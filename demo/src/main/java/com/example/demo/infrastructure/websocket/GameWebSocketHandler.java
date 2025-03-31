@@ -106,7 +106,7 @@ public class GameWebSocketHandler extends TextWebSocketHandler {
 
         GameId gameId = GameId.from(message.getGameId());
         Move move = Move.create(message.getX(), message.getY(), playerId);
-        System.out.println("Player   move");
+
         gameService.makeMove(gameId, playerId, move)
                 .subscribe().with(
                         unused -> log.info("Move made successfully"),

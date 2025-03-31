@@ -22,37 +22,29 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class GameEventHandler {
     private final GameWebSocketHandler webSocketHandler;
-    private final GameService gameService;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Async
     @EventListener
     public void handleMovePlayedEvent(MovePlayedEvent event) throws JsonProcessingException {
-        log.info("Move played in game {}: Player {} moved to ({},{})",
-                event.getGameId(), event.getPlayerId(), event.getMove().getX(), event.getMove().getY());
+        log.info("Move played in game {}: Player {} moved to ({},{}), Next player: {}",
+                event.getGameId(), event.getPlayerId(), event.getMove().getX(), event.getMove().getY(),
+                event.getNextPlayerId());
 
-        // Get updated game state
-        gameService.getGameState(event.getGameId())
-                .subscribe().with(
-                        gameState -> {
-                            // Send the updated game state to all players
-                            sendMovePlayedResponse(event, gameState);
-                        },
-                        error -> log.error("Error getting game state after move", error));
+        sendMovePlayedResponse(event);
     }
 
-    private void sendMovePlayedResponse(MovePlayedEvent event, GameStateDto gameState) {
+    private void sendMovePlayedResponse(MovePlayedEvent event) {
         try {
             MakeMoveResponseDto responseDto = new MakeMoveResponseDto(
-                    gameState.getBoard(),
+                    event.getBoard(),
                     event.getMove(),
-                    gameState.getNextPlayer(),
-                    gameState.getState());
+                    event.getNextPlayerId());
 
             String payload = objectMapper.writeValueAsString(responseDto);
 
             WebSocketResponse response = new WebSocketResponse("PLAY_MOVE", payload);
-            gameState.getPlayers()
+            event.getPlayerIds()
                     .forEach(playerId -> webSocketHandler.sendToPlayer(playerId, response));
         } catch (JsonProcessingException e) {
             e.printStackTrace();

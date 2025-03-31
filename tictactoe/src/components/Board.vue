@@ -36,8 +36,11 @@
 import { storeToRefs } from 'pinia';
 import { useGameStore } from '../stores/useGameStore';
 import { useAuthStore } from '../stores/useAuthStore';
-import { ref } from 'vue';
-import { useWebSocket } from '../hooks/useWebSockets';
+import { ref, inject } from 'vue';
+import { WebSocketService } from '../WebSocketService';
+
+// Use the existing WebSocket service via dependency injection
+const webSocketService = inject('webSocketService') as WebSocketService;
 
 const gameStore = useGameStore();
 const authStore = useAuthStore();
@@ -45,35 +48,15 @@ const pendingMove = ref<{row: number, col: number} | null>(null);
 
 const { board, player, opponent, yourTurn: isYourTurn } = storeToRefs(gameStore);
 
-// Setup WebSocket connection
-const { sendMessage, isConnected } = useWebSocket({
-    url: 'ws://localhost:8080/ws/game',
-    playerId: authStore.playerId,
-    onOpen: () => {
-        console.log('WebSocket connected');
-    },
-    onMessage: (event) => {
-        // Handle incoming messages
-        console.log('WebSocket message received:', event.data);
-    },
-    onError: (error) => {
-        console.error('WebSocket error:', error);
-    }
-});
-
 const getCellContent = (row: number, col: number): string => {
-    console.log('Getting cell content:', row, col);
     if (!board.value || !board.value.board[row] || board.value.board[row][col] === null) {
         return '';
     }
 
     const value = board.value.board[row][col]?.id;
-    console.log('Cell value:', value, player.value?.playerId, opponent.value?.playerId);
     if (value === player.value?.playerId) {
-        console.log('Player type:', player.value?.playerType);
         return player.value.playerType;
     } else if (value === opponent.value?.playerId) {
-        console.log('Opponent type:', opponent.value?.playerType);
         return opponent.value.playerType;
     }
 
@@ -116,9 +99,8 @@ const makeMove = async (row: number, col: number) => {
         };
         
         // Send the move through WebSocket
-        sendMessage(JSON.stringify(moveMessage));
+        webSocketService.sendMessage(moveMessage);
         
-        // The server will send back a game update via WebSocket
     } catch (error) {
         console.error('Failed to make move:', error);
         // Remove pending state if there was an error

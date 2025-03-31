@@ -1,178 +1,87 @@
 <template>
-  <div class="game-status">{{ displayMessage }}</div>
+  <div class="game-container">
+    <div class="game-status">{{ viewModel.displayMessage }}</div>
+    
+    <div v-if="viewModel.errorMessage.value" class="error-message">
+      {{ viewModel.errorMessage }}
+    </div>
 
-  <Board v-if="gameActive" />
+    <Board v-if="viewModel.gameActive.value" />
 
-  <div class="game-controls">
-    <button @click="handleMatchmaking" class="btn-matchmaking" :disabled="isConnecting">
-      {{ matchmakingButtonText }}
-    </button>
+    <div class="game-controls">
+      <Button 
+        @click="viewModel.handleMatchmaking" 
+        class="btn-matchmaking" 
+        :disabled="webSocketService.isConnecting.value || viewModel.gameActive.value">
+        {{ viewModel.matchmakingButtonText }}
+      </Button>
 
-    <p class="connection-status">
-      {{ connectedText }}
-    </p>
+      <p class="connection-status">
+        {{ viewModel.connectedText }}
+      </p>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref, watch, computed } from 'vue';
-import { useWebSocket, UseWebSocketOptions } from '../hooks/useWebSockets';
-import { useAuthStore } from '../stores/useAuthStore';
-import { WebSocketMessageType, WebSocketMatchFoundMessage, WebSocketGenericMessage, WebSocketPlayMoveMessage, WebSocketPlayMovePayload, GameEndedPayload } from '../types';
-import { useGameStore } from '../stores/useGameStore';
+import { inject, onMounted, onUnmounted } from 'vue';
 import Board from './Board.vue';
+import { GameViewModel } from '../features/game/viewModels/GameViewModel';
+import { IWebSocketService } from '../IWebSocketService';
+import Button from './UI/Button.vue';
 
-const gameStore = useGameStore();
-const { playerId, username } = useAuthStore();
-
-const options: UseWebSocketOptions = {
-    url: 'ws://localhost:8080/ws/game',
-    playerId,
-    onOpen: (event) => {
-        console.log('WebSocket connection opened:', event);
-    },
-    onMessage: (event: MessageEvent<string>) => {
-        console.log('WebSocket message received:', event.data);
-
-        try {
-            console.log('Raw message:', event);
-            const genericMessage = JSON.parse(event.data) as WebSocketGenericMessage;
-            
-            console.log('Message type:', genericMessage.payload);
-            const typeToEnum = WebSocketMessageType[genericMessage.type as keyof typeof WebSocketMessageType]; 
-            
-            switch (typeToEnum) {
-                case WebSocketMessageType.IN_QUEUE:
-                    displayMessage.value = 'You are in the queue for matchmaking.';
-                    break;
-                case WebSocketMessageType.MATCH_FOUND:
-                    const parsedPayload = JSON.parse(genericMessage.payload);
-                    const matchFoundMessage = {
-                        type: WebSocketMessageType.MATCH_FOUND,
-                        payload: parsedPayload
-                    } as WebSocketMatchFoundMessage;
-
-                    console.log('Match found:', matchFoundMessage);
-                    gameStore.setGame(matchFoundMessage);
-                    displayMessage.value = `Match found! Your opponent is ${gameStore.getOpponent()?.username}`;
-                    
-                    // Add turn information
-                    if (gameStore.isYourTurn()) {
-                        displayMessage.value += ". It's your turn!";
-                    } else {
-                        displayMessage.value += ". Waiting for opponent's move...";
-                    }
-                    break;
-                case WebSocketMessageType.ALREADY_IN_QUEUE:
-                    displayMessage.value = 'You are already in the matchmaking queue.';
-                    break;
-                case WebSocketMessageType.PLAY_MOVE:
-                    const movePayload = JSON.parse(genericMessage.payload) as WebSocketPlayMovePayload;
-                    console.log('Opponent move:', movePayload);
-                    gameStore.playMove(movePayload);
-                    break;
-                case WebSocketMessageType.GAME_ENDED:
-                    const gameOverMessage = JSON.parse(genericMessage.payload) as GameEndedPayload;
-                    console.log('Game over:', gameOverMessage);
-                    // gameStore.pl;
-                    displayMessage.value = `Game over! ${!gameOverMessage.winner.id  ? 'Draw!' : gameOverMessage.winner.id === playerId ? 'You win!' : 'You lose!'}`;
-                    break;
-                default:
-                    console.log('Unknown message type:', genericMessage.type);
-            }
-        } catch (error) {
-            console.error('Error parsing WebSocket message:', error);
-        }
-    },
-    onError: (event) => {
-        console.error('WebSocket error:', event);
-    },
-    onClose: (event) => {
-        console.log('WebSocket connection closed:', event);
-    },
-};
-
-const { connect, sendMessage, isConnected, isConnecting } = useWebSocket(options);
-
-const displayMessage = ref<string>('');
-const connectedText = ref<string>('Not connected');
-const inQueue = ref<boolean>(false);
-
-const gameActive = computed(() => {
-    return gameStore.board !== null;
-});
-
-const matchmakingButtonText = computed(() => {
-    if (isConnecting.value) return 'Connecting...';
-    if (inQueue.value) return 'Looking for opponent...';
-    if (gameActive.value) return 'In Game';
-    return `Find Match (${username})`;
-});
-
-watch(isConnected, (newValue) => {
-    console.log('isConnected:', newValue);
-    connectedText.value = newValue ? 'Connected to server' : 'Not connected to server';
-});
-
-const handleMatchmaking = () => {
-    if (!isConnected.value || gameActive.value) return;
-    
-    inQueue.value = true;
-    
-    const message = {
-        type: 'JOIN_MATCHMAKING',
-        playerId
-    };
-
-    sendMessage(JSON.stringify(message));
-};
+const webSocketService = inject('webSocketService') as IWebSocketService;
+console.log(webSocketService);
+const viewModel = new GameViewModel(webSocketService);
 
 onMounted(() => {
-    connect();
-    gameStore.resetGame();
+    console.log(webSocketService.isConnecting.value);
+  viewModel.initialize();
+});
+
+onUnmounted(() => {
+  webSocketService.disconnect();
 });
 </script>
 
 <style scoped>
+.game-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  max-width: 500px;
+  margin: 0 auto;
+}
+
 .game-status {
-    margin: 1rem 0;
-    padding: 0.5rem;
-    background-color: rgba(255, 255, 255, 0.1);
-    border-radius: 4px;
-    text-align: center;
-    min-height: 2.5rem;
+  margin: 1rem 0;
+  padding: 0.5rem;
+  background-color: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  text-align: center;
+  min-height: 2.5rem;
+}
+
+.error-message {
+  margin: 0.5rem 0;
+  padding: 0.5rem;
+  background-color: rgba(255, 0, 0, 0.2);
+  color: #ff6b6b;
+  border-radius: 4px;
+  text-align: center;
 }
 
 .game-controls {
-    margin-top: 1.5rem;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-}
-
-.btn-matchmaking {
-    padding: 0.75rem 1.5rem;
-    background-color: #4CAF50;
-    color: white;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 1rem;
-    transition: background-color 0.3s;
-}
-
-.btn-matchmaking:hover:not(:disabled) {
-    background-color: #45a049;
-}
-
-.btn-matchmaking:disabled {
-    background-color: #cccccc;
-    cursor: not-allowed;
+  margin-top: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
 .connection-status {
-    margin-top: 0.5rem;
-    font-size: 0.9rem;
-    color: #999;
+  margin-top: 0.5rem;
+  font-size: 0.9rem;
+  color: #999;
 }
 </style>

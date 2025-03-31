@@ -1,6 +1,5 @@
 package com.example.demo.domain.service;
 
-import com.example.demo.domain.dto.GameStateDto;
 import com.example.demo.domain.valueObject.GameId;
 import com.example.demo.domain.valueObject.Move;
 import com.example.demo.domain.valueObject.PlayerId;
@@ -15,15 +14,7 @@ public interface GameService {
      * @param move     The move to make
      * @return Uni<Void> indicating completion
      */
-    Uni<Void> makeMove(GameId gameId, PlayerId playerId, Move move);
-
-    /**
-     * Get the game state for a specific game
-     * 
-     * @param gameId The ID of the game
-     * @return Uni<GameStateDto> with the current game state
-     */
-    Uni<GameStateDto> getGameState(GameId gameId);
+    Uni<Void> makeMove(GameId gameId, PlayerId playerId, Move move);;
 
     /**
      * Check if a player is part of a game

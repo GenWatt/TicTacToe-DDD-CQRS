@@ -8,6 +8,9 @@ export enum WebSocketMessageType {
 
 export type WebSocketInQueueMessage = {
     type: WebSocketMessageType.IN_QUEUE;
+    payload: {
+        message: string;
+    };
 }
 
 export interface Player {
@@ -46,7 +49,7 @@ export interface MatchFoundPayload {
     opponent: PlayerDto;
     board: Board;
     moves: Move[];
-    yourTurn: boolean;
+    currentPlayerMoveId: string;
 }
 
 export interface WebSocketMatchFoundMessage {
@@ -58,7 +61,6 @@ export interface WebSocketPlayMovePayload {
     board: Board;
     lastMove: Move;
     nextPlayer: { id: string };
-    gameState: GameState;
 }
 
 export interface WebSocketPlayMoveMessage {
@@ -92,6 +94,6 @@ export interface WebSocketGameEndedMessage {
 
 export type GameEndedPayload = {
     board: Board;
-    winner: { id: string };
+    winner: { id: string } | null;
     gameState: GameState;
 }

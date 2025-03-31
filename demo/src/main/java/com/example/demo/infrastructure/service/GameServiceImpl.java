@@ -1,10 +1,8 @@
 package com.example.demo.infrastructure.service;
 
-import com.example.demo.domain.dto.GameStateDto;
 import com.example.demo.domain.repository.GameRepository;
 import com.example.demo.domain.service.GameService;
 import com.example.demo.domain.valueObject.GameId;
-import com.example.demo.domain.valueObject.GameState;
 import com.example.demo.domain.valueObject.Move;
 import com.example.demo.domain.valueObject.PlayerId;
 import io.smallrye.mutiny.Uni;
@@ -37,38 +35,6 @@ public class GameServiceImpl implements GameService {
                 })
                 .onFailure().invoke(e -> log.error("Failed to make move", e))
                 .replaceWithVoid();
-    }
-
-    @Override
-    public Uni<GameStateDto> getGameState(GameId gameId) {
-        return gameRepository.findById(gameId)
-                .onItem().transform(game -> {
-                    PlayerId nextPlayer = null;
-                    PlayerId winner = null;
-
-                    // Determine next player logic based on moves
-                    if (game.getState().equals(GameState.IN_PROGRESS)) {
-                        int moveCount = game.getMoves().size();
-                        if (moveCount > 0) {
-                            // Alternate between players
-                            nextPlayer = game.getPlayerIds().get(moveCount % 2);
-                        } else {
-                            // First player starts
-                            nextPlayer = game.getPlayerIds().get(0);
-                        }
-                    }
-
-                    winner = game.getBoard().checkWinner();
-
-                    return GameStateDto.builder()
-                            .players(game.getPlayerIds())
-                            .board(game.getBoard())
-                            .moves(game.getMoves())
-                            .state(game.getState())
-                            .nextPlayer(nextPlayer)
-                            .winner(winner)
-                            .build();
-                });
     }
 
     @Override

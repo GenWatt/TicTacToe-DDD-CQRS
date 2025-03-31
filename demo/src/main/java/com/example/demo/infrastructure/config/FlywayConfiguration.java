@@ -1,46 +1,37 @@
-// package com.example.demo.infrastructure.config;
+package com.example.demo.infrastructure.config;
 
-// import org.flywaydb.core.Flyway;
-// import org.springframework.beans.factory.annotation.Value;
-// import org.springframework.context.annotation.Bean;
-// import org.springframework.context.annotation.Configuration;
-// import org.springframework.context.annotation.Primary;
-// import javax.sql.DataSource;
+import javax.sql.DataSource;
 
-// @Configuration
-// public class FlywayConfiguration {
+import org.flywaydb.core.Flyway;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.jdbc.DataSourceBuilder;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.core.env.Environment;
 
-// @Value("${spring.datasource.url}")
-// private String jdbcUrl;
+@Configuration
+public class FlywayConfiguration {
 
-// @Value("${spring.datasource.username}")
-// private String username;
+    @Autowired
+    private Environment env;
 
-// @Value("${spring.datasource.password}")
-// private String password;
+    @Bean
+    DataSource flywayDataSource() {
+        return DataSourceBuilder.create()
+                .url(env.getRequiredProperty("spring.datasource.url"))
+                .username(env.getRequiredProperty("spring.datasource.username"))
+                .password(env.getRequiredProperty("spring.datasource.password"))
+                .driverClassName(env.getRequiredProperty("spring.datasource.driver-class-name"))
+                .build();
+    }
 
-// @Value("${spring.datasource.driver-class-name}")
-// private String driverClassName;
-
-// @Bean
-// public DataSource dataSource() {
-// DriverManagerDataSource dataSource = new DriverManagerDataSource();
-// dataSource.setDriverClassName(driverClassName);
-// dataSource.setUrl(jdbcUrl);
-// dataSource.setUsername(username);
-// dataSource.setPassword(password);
-// return dataSource;
-// }
-
-// @Bean(name = "flyway")
-// @Primary
-// public Flyway flyway(DataSource dataSource) {
-// Flyway flyway = Flyway.configure()
-// .dataSource(dataSource)
-// .baselineOnMigrate(true)
-// .locations("classpath:db/migration")
-// .load();
-
-// return flyway;
-// }
-// }
+    @Bean(initMethod = "migrate")
+    Flyway flyway(DataSource flywayDataSource) {
+        return Flyway.configure()
+                .dataSource(flywayDataSource)
+                .locations(env.getRequiredProperty("spring.flyway.locations"))
+                .baselineOnMigrate(true)
+                .validateOnMigrate(true)
+                .load();
+    }
+}

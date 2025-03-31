@@ -20,7 +20,7 @@ public class GameRepositoryImpl implements GameRepository {
     private final Mutiny.SessionFactory sessionFactory;
     private final GameMapper gameMapper;
 
-    private GameRepositoryImpl(Mutiny.SessionFactory sessionFactory, GameMapper gameMapper) {
+    public GameRepositoryImpl(Mutiny.SessionFactory sessionFactory, GameMapper gameMapper) {
         this.sessionFactory = sessionFactory;
         this.gameMapper = gameMapper;
     }

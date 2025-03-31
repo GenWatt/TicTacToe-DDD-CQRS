@@ -24,6 +24,7 @@ public class Game extends AggregateRoot<GameId> {
     private List<PlayerId> playerIds;
     private List<Move> moves;
     private Board board;
+    private PlayerId currentPlayerMoveId;
 
     private Game(GameId id, List<PlayerId> playerIds) {
         super(id, 1);
@@ -37,6 +38,7 @@ public class Game extends AggregateRoot<GameId> {
         this.playerIds = playerIds;
         this.moves = new ArrayList<>();
         this.board = Board.empty();
+        this.currentPlayerMoveId = playerIds.get(0);
 
         registerEvent(new GameCreatedEvent(id, playerIds));
     }
@@ -47,7 +49,7 @@ public class Game extends AggregateRoot<GameId> {
 
     public static Game reconstruct(GameId id, GameState state, LocalDateTime createdAt,
             LocalDateTime updatedAt, List<PlayerId> players,
-            List<Move> moves, Board board) {
+            List<Move> moves, Board board, PlayerId currentPlayerMoveId) {
 
         Game game = new Game(id, players);
         game.state = state;
@@ -55,6 +57,8 @@ public class Game extends AggregateRoot<GameId> {
         game.updatedAt = updatedAt;
         game.moves = moves;
         game.board = board;
+        game.currentPlayerMoveId = currentPlayerMoveId;
+        game.playerIds = players;
 
         return game;
     }
@@ -68,11 +72,15 @@ public class Game extends AggregateRoot<GameId> {
             throw new GameException("Player is not part of this game.");
         }
 
+        if (!currentPlayerMoveId.equals(playerId)) {
+            throw new GameException("It's not your turn.");
+        }
+
         this.board = board.makeMove(move.getX(), move.getY(), playerId);
         moves.add(move);
         updatedAt = LocalDateTime.now();
-
-        registerEvent(new MovePlayedEvent(getId(), playerId, move));
+        currentPlayerMoveId = playerIds.get((playerIds.indexOf(currentPlayerMoveId) + 1) % playerIds.size());
+        registerEvent(new MovePlayedEvent(getId(), playerId, currentPlayerMoveId, playerIds, move, board));
 
         PlayerId winner = board.checkWinner();
         if (winner != null || board.isFull()) {

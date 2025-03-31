@@ -1,6 +1,7 @@
 package com.example.demo.application.event;
 
 import com.example.demo.application.command.CreateGameCommand;
+import com.example.demo.application.dto.InQueueResponseDto;
 import com.example.demo.application.dto.MatchFoundResponseDto;
 import com.example.demo.application.dto.PlayerDto;
 import com.example.demo.application.handler.CreateGameCommandHandler;
@@ -38,10 +39,20 @@ public class MatchmakingEventHandler {
     @EventListener
     public void handlePlayerJoinedMatchmaking(PlayerJoinedEvent event) {
         log.info("Player {} joined matchmaking", event.getPlayerId());
+        var response = InQueueResponseDto.builder()
+                .message("You have joined the matchmaking queue")
+                .build();
 
-        // Notify the player that they have joined the matchmaking queue
-        WebSocketResponse response = new WebSocketResponse("IN_QUEUE", "Waiting for opponent");
-        webSocketHandler.sendToPlayer(event.getPlayerId(), response);
+        String payload = null;
+
+        try {
+            payload = objectMapper.writeValueAsString(response);
+        } catch (JsonProcessingException e) {
+            log.error("Error serializing InQueueResponseDto", e);
+        }
+
+        WebSocketResponse responseMessage = new WebSocketResponse("IN_QUEUE", payload);
+        webSocketHandler.sendToPlayer(event.getPlayerId(), responseMessage);
     }
 
     @Async
@@ -70,10 +81,7 @@ public class MatchmakingEventHandler {
                                             .findFirst()
                                             .orElseThrow();
 
-                                    // randomly assign who goes first
-                                    boolean goesFirst = Math.random() < 0.5;
-
-                                    if (goesFirst) {
+                                    if (game.getCurrentPlayerMoveId().equals(player1.getId())) {
                                         player1.setPlayerType(PlayerType.O);
                                         player2.setPlayerType(PlayerType.X);
                                     } else {
@@ -86,10 +94,10 @@ public class MatchmakingEventHandler {
                                     playerRepository.save(player2).subscribe();
 
                                     // Send player1 their personalized view
-                                    sendPersonalizedMatchResponse(game, player1, player2, goesFirst);
+                                    sendPersonalizedMatchResponse(game, player1, player2);
 
                                     // Send player2 their personalized view
-                                    sendPersonalizedMatchResponse(game, player2, player1, !goesFirst);
+                                    sendPersonalizedMatchResponse(game, player2, player1);
 
                                 } catch (Exception e) {
                                     log.error("Error creating match notification", e);
@@ -98,14 +106,14 @@ public class MatchmakingEventHandler {
                 });
     }
 
-    private void sendPersonalizedMatchResponse(Game game, Player player, Player opponent, boolean goesFirst) {
+    private void sendPersonalizedMatchResponse(Game game, Player player, Player opponent) {
         try {
             var dto = MatchFoundResponseDto.builder()
                     .gameId(game.getId().toString())
                     .gameState(game.getState())
                     .board(game.getBoard())
                     .moves(game.getMoves())
-                    .yourTurn(goesFirst)
+                    .currentPlayerMoveId(game.getCurrentPlayerMoveId().getId().toString())
                     .you(PlayerDto.builder()
                             .playerId(player.getId().getId())
                             .username(player.getUsername().getUsername())

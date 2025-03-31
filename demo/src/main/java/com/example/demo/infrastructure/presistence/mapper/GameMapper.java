@@ -32,7 +32,8 @@ public class GameMapper {
                 entity.getUpdatedAt(),
                 playerIds,
                 entity.getMoves() != null ? entity.getMoves() : Collections.emptyList(),
-                entity.getBoard());
+                entity.getBoard(),
+                entity.getCurrentPlayerMoveId());
     }
 
     public GameEntity toEntity(Game game) {
@@ -45,6 +46,7 @@ public class GameMapper {
                 .state(game.getState())
                 .createdAt(game.getCreatedAt())
                 .updatedAt(game.getUpdatedAt())
+                .currentPlayerMoveId(game.getCurrentPlayerMoveId())
                 .moves(game.getMoves() != null ? game.getMoves() : Collections.emptyList())
                 .board(game.getBoard())
                 .build();

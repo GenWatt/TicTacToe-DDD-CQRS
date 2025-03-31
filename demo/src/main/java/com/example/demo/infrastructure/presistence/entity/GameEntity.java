@@ -4,11 +4,15 @@ import com.example.demo.domain.valueObject.Board;
 import com.example.demo.domain.valueObject.GameId;
 import com.example.demo.domain.valueObject.GameState;
 import com.example.demo.domain.valueObject.Move;
+import com.example.demo.domain.valueObject.PlayerId;
 import com.example.demo.infrastructure.presistence.converter.BoardConverter;
 import com.example.demo.infrastructure.presistence.converter.MoveListConverter;
 
+import jakarta.persistence.AttributeOverride;
+import jakarta.persistence.AttributeOverrides;
 import jakarta.persistence.Column;
 import jakarta.persistence.Convert;
+import jakarta.persistence.Embedded;
 import jakarta.persistence.EmbeddedId;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -46,6 +50,13 @@ public class GameEntity {
     @Column(columnDefinition = "TEXT")
     @Convert(converter = MoveListConverter.class)
     private List<Move> moves;
+
+    @Column(name = "current_player_move_id")
+    @Embedded
+    @AttributeOverrides({
+            @AttributeOverride(name = "id", column = @Column(name = "current_player_move_id"))
+    })
+    private PlayerId currentPlayerMoveId;
 
     @Column(name = "created_at")
     private LocalDateTime createdAt;

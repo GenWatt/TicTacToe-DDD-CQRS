@@ -1,10 +1,4 @@
--- DROP TABLE IF EXISTS game_players CASCADE;
--- DROP TABLE IF EXISTS games CASCADE;
--- DROP TABLE IF EXISTS player CASCADE;
--- DROP INDEX IF EXISTS idx_games_state;
--- DROP INDEX IF EXISTS idx_player_username;
--- DROP INDEX IF EXISTS idx_game_players_game_id;
-CREATE TABLE IF NOT EXISTS player (
+CREATE TABLE IF NOT EXISTS players (
     id UUID PRIMARY KEY,
     username VARCHAR(50) NOT NULL,
     created_at TIMESTAMP NOT NULL,
@@ -18,14 +12,15 @@ CREATE TABLE IF NOT EXISTS games (
     board TEXT,
     moves TEXT,
     created_at TIMESTAMP NOT NULL,
-    updated_at TIMESTAMP NOT NULL
+    updated_at TIMESTAMP NOT NULL,
+    current_player_move_id UUID NOT NULL
 );
 CREATE TABLE IF NOT EXISTS game_players (
     game_id UUID NOT NULL,
     player_id UUID NOT NULL,
     PRIMARY KEY (game_id, player_id),
     FOREIGN KEY (game_id) REFERENCES games(id),
-    FOREIGN KEY (player_id) REFERENCES player(id)
+    FOREIGN KEY (player_id) REFERENCES players(id)
 );
 CREATE INDEX idx_games_state ON games(state);
-CREATE INDEX idx_player_username ON player(username);
+CREATE INDEX idx_player_username ON players(username);

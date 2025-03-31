@@ -18,5 +18,5 @@ public class MatchFoundResponseDto {
     private PlayerDto opponent;
     private Board board;
     private List<Move> moves;
-    private boolean yourTurn;
+    private String currentPlayerMoveId;
 }

@@ -10,6 +10,7 @@ export const useGameStore = defineStore('game', () => {
     const opponent = ref<PlayerDto | null>(null);
     const board = ref<Board | null>(null);
     const moves = ref<Move[]>([]);
+    const currentPlayerMoveId = ref<string>("");
     const yourTurn = ref<boolean>(false);
 
     function getOpponent(): PlayerDto | null {
@@ -24,6 +25,10 @@ export const useGameStore = defineStore('game', () => {
         return board.value;
     }
 
+    function getCurrentPlayerMoveId(): string {
+        return currentPlayerMoveId.value;
+    }
+
     function isYourTurn(): boolean {
         return yourTurn.value;
     }
@@ -35,8 +40,6 @@ export const useGameStore = defineStore('game', () => {
     function setGame(message: WebSocketMatchFoundMessage) {
         const payload = message.payload;
 
-        console.log("Player:", payload.you);
-        console.log("Opponent:", payload.opponent);
 
         gameId.value = payload.gameId;
         gameState.value = payload.gameState;
@@ -44,7 +47,8 @@ export const useGameStore = defineStore('game', () => {
         opponent.value = payload.opponent;
         board.value = payload.board;
         moves.value = payload.moves;
-        yourTurn.value = payload.yourTurn;
+        currentPlayerMoveId.value = payload.currentPlayerMoveId;
+        yourTurn.value = player.value?.playerId === currentPlayerMoveId.value;
     }
 
     function resetGame() {
@@ -54,15 +58,17 @@ export const useGameStore = defineStore('game', () => {
         opponent.value = null;
         board.value = null;
         moves.value = [];
-        yourTurn.value = false;
+        currentPlayerMoveId.value = "";
     }
 
     function playMove(payload: WebSocketPlayMovePayload) {
-        const { lastMove, board: newBoard, gameState: newGameState, nextPlayer } = payload;
+        const { lastMove, board: newBoard, nextPlayer } = payload;
+
+        console.log('playMove', payload);
         moves.value.push(lastMove);
         board.value = newBoard;
-        gameState.value = newGameState;
-        yourTurn.value = nextPlayer.id === player.value?.playerId;
+        currentPlayerMoveId.value = nextPlayer.id;
+        yourTurn.value = player.value?.playerId === currentPlayerMoveId.value;
     }
 
     return {
@@ -81,5 +87,6 @@ export const useGameStore = defineStore('game', () => {
         setGame,
         resetGame,
         playMove,
+        getCurrentPlayerMoveId
     };
 });

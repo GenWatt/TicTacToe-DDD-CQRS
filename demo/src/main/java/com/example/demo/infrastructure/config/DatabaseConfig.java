@@ -10,6 +10,7 @@ import org.hibernate.reactive.mutiny.Mutiny;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.DependsOn;
 
 @Configuration
 public class DatabaseConfig {
@@ -52,7 +53,8 @@ public class DatabaseConfig {
     }
 
     @Bean
-    public Mutiny.SessionFactory sessionFactory() {
+    @DependsOn("flyway")
+    Mutiny.SessionFactory sessionFactory() {
         try {
             // Skip setting properties - use persistence.xml directly
             return Persistence.createEntityManagerFactory("game-persistence-unit")
