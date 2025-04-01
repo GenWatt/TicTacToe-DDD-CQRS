@@ -4,6 +4,7 @@ import org.springframework.stereotype.Component;
 
 import com.example.demo.application.command.LoginPlayerCommand;
 import com.example.demo.domain.aggregate.Player;
+import com.example.demo.domain.exception.PlayerNotFoundException;
 import com.example.demo.domain.repository.PlayerRepository;
 
 import io.smallrye.mutiny.Uni;
@@ -11,16 +12,12 @@ import lombok.RequiredArgsConstructor;
 
 @Component
 @RequiredArgsConstructor
-public class LoginPlayerCommandHandler {
+public class LoginPlayerCommandHandler implements CommandHandler<LoginPlayerCommand, Player> {
     private final PlayerRepository playerRepository;
 
     public Uni<Player> handle(LoginPlayerCommand command) {
-        if (command.getUsername() == null) {
-            return Uni.createFrom().failure(new IllegalArgumentException("Username is required"));
-        }
-
         return playerRepository.findByUsername(command.getUsername())
-                .onItem().ifNull().failWith(new IllegalArgumentException("Player not found"))
+                .onItem().ifNull().failWith(new PlayerNotFoundException(command.getUsername()))
                 .onItem().transform(player -> player);
     }
 }

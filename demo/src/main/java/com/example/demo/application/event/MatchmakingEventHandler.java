@@ -12,7 +12,7 @@ import com.example.demo.domain.event.PlayerMatchedEvent;
 import com.example.demo.domain.repository.PlayerRepository;
 import com.example.demo.domain.valueObject.PlayerId;
 import com.example.demo.domain.valueObject.PlayerType;
-import com.example.demo.infrastructure.websocket.GameWebSocketHandler;
+import com.example.demo.infrastructure.websocket.WebSocketSessionService;
 import com.example.demo.infrastructure.websocket.message.WebSocketResponse;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -30,7 +30,7 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class MatchmakingEventHandler {
 
-    private final GameWebSocketHandler webSocketHandler;
+    private final WebSocketSessionService webSocketHandler;
     private final CreateGameCommandHandler createGameCommandHandler;
     private final PlayerRepository playerRepository;
     private final ObjectMapper objectMapper = new ObjectMapper();
@@ -109,7 +109,7 @@ public class MatchmakingEventHandler {
     private void sendPersonalizedMatchResponse(Game game, Player player, Player opponent) {
         try {
             var dto = MatchFoundResponseDto.builder()
-                    .gameId(game.getId().toString())
+                    .gameId(game.getId().getId().toString())
                     .gameState(game.getState())
                     .board(game.getBoard())
                     .moves(game.getMoves())

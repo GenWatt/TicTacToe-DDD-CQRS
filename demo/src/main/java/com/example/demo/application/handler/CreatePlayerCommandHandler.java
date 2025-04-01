@@ -12,14 +12,13 @@ import org.springframework.stereotype.Component;
 
 @Component
 @RequiredArgsConstructor
-public class CreatePlayerCommandHandler {
+public class CreatePlayerCommandHandler implements CommandHandler<CreatePlayerCommand, Player> {
     private final PlayerRepositoryImpl playerRepository;
 
     public Uni<Player> handle(CreatePlayerCommand command) {
         Username username = command.getUsername();
 
         Player player = Player.create(username);
-        System.out.println("Creating player: " + player);
         return playerRepository.save(player);
     }
 }

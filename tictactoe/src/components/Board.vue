@@ -37,10 +37,7 @@ import { storeToRefs } from 'pinia';
 import { useGameStore } from '../stores/useGameStore';
 import { useAuthStore } from '../stores/useAuthStore';
 import { ref, inject } from 'vue';
-import { WebSocketService } from '../WebSocketService';
-
-// Use the existing WebSocket service via dependency injection
-const webSocketService = inject('webSocketService') as WebSocketService;
+import { webSocketService } from '../gameWebsocketService';
 
 const gameStore = useGameStore();
 const authStore = useAuthStore();

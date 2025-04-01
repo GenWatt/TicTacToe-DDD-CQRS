@@ -5,5 +5,7 @@ public enum MessageType {
     LEAVE_MATCHMAKING,
     JOIN_GAME,
     LEAVE_GAME,
-    PLAY_MOVE
+    PLAY_MOVE,
+    CONNECTION_ESTABLISHED,
+    CONNECTION_CLOSED,
 }

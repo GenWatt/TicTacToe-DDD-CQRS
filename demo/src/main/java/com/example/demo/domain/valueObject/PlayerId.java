@@ -6,6 +6,8 @@ import lombok.Value;
 import java.io.Serializable;
 import java.util.UUID;
 
+import com.example.demo.domain.util.UuidUtil;
+
 import jakarta.persistence.Embeddable;
 
 @Embeddable
@@ -16,7 +18,7 @@ public class PlayerId implements Serializable {
     private UUID id;
 
     public PlayerId(String id) {
-        this.id = UUID.fromString(id);
+        this.id = UuidUtil.fromString(id);
     }
 
     public static PlayerId create() {
@@ -24,7 +26,7 @@ public class PlayerId implements Serializable {
     }
 
     public static PlayerId from(String id) {
-        return new PlayerId(UUID.fromString(id));
+        return new PlayerId(id);
     }
 
     public static PlayerId from(UUID id) {

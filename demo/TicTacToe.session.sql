@@ -1,6 +1,0 @@
-DROP TABLE IF EXISTS game_players CASCADE;
-DROP TABLE IF EXISTS games CASCADE;
-DROP TABLE IF EXISTS players CASCADE;
-DROP TABLE IF EXISTS flyway_schema_history CASCADE;
-DROP INDEX IF EXISTS idx_games_state;
-DROP INDEX IF EXISTS idx_player_username;

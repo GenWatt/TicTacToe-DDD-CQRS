@@ -12,10 +12,23 @@
       <Button 
         @click="viewModel.handleMatchmaking" 
         class="btn-matchmaking" 
-        :disabled="webSocketService.isConnecting.value || viewModel.gameActive.value">
+        :disabled="viewModel.isConnecting.value || viewModel.gameActive.value || !viewModel.isConnected.value">
         {{ viewModel.matchmakingButtonText }}
       </Button>
 
+      <Button 
+        @click="viewModel.connect" 
+        class="btn-matchmaking" 
+        :disabled="viewModel.isConnecting.value || viewModel.isConnected.value">
+        {{ viewModel.reconnectButtonText }}
+      </Button>
+
+      <Button 
+        @click="viewModel.disconnect" 
+        class="btn-matchmaking" 
+        :disabled="viewModel.isConnecting.value || !viewModel.isConnected.value">
+        {{ viewModel.disconnectButtonText }}
+      </Button>
       <p class="connection-status">
         {{ viewModel.connectedText }}
       </p>
@@ -24,24 +37,17 @@
 </template>
 
 <script setup lang="ts">
-import { inject, onMounted, onUnmounted } from 'vue';
+import {  onMounted } from 'vue';
 import Board from './Board.vue';
-import { GameViewModel } from '../features/game/viewModels/GameViewModel';
-import { IWebSocketService } from '../IWebSocketService';
+import {  useGameViewModel } from '../features/game/viewModels/GameViewModel';
 import Button from './UI/Button.vue';
 
-const webSocketService = inject('webSocketService') as IWebSocketService;
-console.log(webSocketService);
-const viewModel = new GameViewModel(webSocketService);
+const viewModel = useGameViewModel();
 
 onMounted(() => {
-    console.log(webSocketService.isConnecting.value);
   viewModel.initialize();
 });
 
-onUnmounted(() => {
-  webSocketService.disconnect();
-});
 </script>
 
 <style scoped>

@@ -1,13 +1,11 @@
 package com.example.demo.infrastructure.websocket.message;
 
-import java.util.UUID;
-
 import lombok.Getter;
 
 @Getter
 public class PlayMoveMessage extends MessageBase {
-    private UUID gameId;
-    private UUID playerId;
+    private String gameId;
+    private String playerId;
 
     private int x;
     private int y;

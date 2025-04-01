@@ -43,6 +43,12 @@ public class GameEntity {
     @Enumerated(EnumType.STRING)
     private GameState state;
 
+    @Embedded
+    @AttributeOverrides({
+            @AttributeOverride(name = "id", column = @Column(name = "winner_id"))
+    })
+    private PlayerId winnerId;
+
     @Convert(converter = BoardConverter.class)
     @Column(columnDefinition = "TEXT")
     private Board board;

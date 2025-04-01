@@ -25,16 +25,10 @@ public class DatabaseConfig {
     private String password;
 
     @Bean
-    public Pool pgPool() {
+    Pool pgPool() {
         String host = extractHostFromJdbcUrl(jdbcUrl);
         int port = extractPortFromJdbcUrl(jdbcUrl);
         String database = extractDatabaseFromJdbcUrl(jdbcUrl);
-
-        System.out.println("Host: " + host);
-        System.out.println("Port: " + port);
-        System.out.println("Database: " + database);
-        System.out.println("Username: " + username);
-        System.out.println("Password: " + password);
 
         PgConnectOptions connectOptions = new PgConnectOptions()
                 .setHost(host)
@@ -56,7 +50,6 @@ public class DatabaseConfig {
     @DependsOn("flyway")
     Mutiny.SessionFactory sessionFactory() {
         try {
-            // Skip setting properties - use persistence.xml directly
             return Persistence.createEntityManagerFactory("game-persistence-unit")
                     .unwrap(Mutiny.SessionFactory.class);
         } catch (Exception e) {
@@ -68,23 +61,28 @@ public class DatabaseConfig {
     private String extractHostFromJdbcUrl(String url) {
         int start = url.indexOf("://") + 3;
         int end = url.indexOf(":", start);
+
         if (end < 0) {
             end = url.indexOf("/", start);
         }
+
         return url.substring(start, end);
     }
 
     private int extractPortFromJdbcUrl(String url) {
         int hostEnd = url.indexOf(":", url.indexOf("://") + 3);
+
         if (hostEnd < 0) {
-            return 5432; // Default PostgreSQL port
+            return 5432;
         }
+
         int portEnd = url.indexOf("/", hostEnd);
         return Integer.parseInt(url.substring(hostEnd + 1, portEnd));
     }
 
     private String extractDatabaseFromJdbcUrl(String url) {
         int dbStart = url.lastIndexOf("/") + 1;
+
         return url.substring(dbStart);
     }
 }

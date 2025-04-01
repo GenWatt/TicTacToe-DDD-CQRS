@@ -59,6 +59,7 @@ export const useGameStore = defineStore('game', () => {
         board.value = null;
         moves.value = [];
         currentPlayerMoveId.value = "";
+        yourTurn.value = false;
     }
 
     function playMove(payload: WebSocketPlayMovePayload) {

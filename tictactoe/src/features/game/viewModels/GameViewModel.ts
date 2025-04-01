@@ -8,159 +8,245 @@ import {
   GameEndedPayload,
   WebSocketInQueueMessage
 } from '../../../types';
-import { IWebSocketService } from '../../../IWebSocketService';
+import { webSocketService } from '../../../gameWebsocketService';
 
+export interface GameViewModel {
+  // State
+  displayMessage: Ref<string>;
+  inQueue: Ref<boolean>;
+  errorMessage: Ref<string>;
+  gameActive: Ref<boolean>;
 
-export class GameViewModel {
-  private gameStore = useGameStore();
-  private authStore = useAuthStore();
-  private webSocketService: IWebSocketService;
+  // WebSocket service state
+  isConnected: Ref<boolean>;
+  isConnecting: Ref<boolean>;
+
+  // Computed properties
+  matchmakingButtonText: Ref<string>;
+  reconnectButtonText: Ref<string>;
+  disconnectButtonText: Ref<string>;
+  connectedText: Ref<string>;
+
+  // Methods
+  initialize: () => void;
+  connect: () => void;
+  disconnect: () => void;
+  handleMatchmaking: () => void;
+}
+
+export function useGameViewModel(): GameViewModel {
+  const gameStore = useGameStore();
+  const authStore = useAuthStore();
 
   // UI state
-  public displayMessage = ref<string>('');
-  public inQueue = ref<boolean>(false);
-  public errorMessage = ref<string>('');
+  const displayMessage = ref<string>('');
+  const inQueue = ref<boolean>(false);
+  const errorMessage = ref<string>('');
 
   // Game state
-  public gameActive = computed(() => this.gameStore.board !== null);
+  const gameActive = computed(() => gameStore.board !== null);
 
   // UI computed properties
-  public matchmakingButtonText = computed(() => {
-    if (this.webSocketService.isConnecting.value) return 'Connecting...';
-    if (this.inQueue.value) return 'Looking for opponent...';
-    if (this.gameActive.value) return 'In Game';
-    return `Find Match (${this.authStore.username})`;
+  const matchmakingButtonText = computed(() => {
+    if (webSocketService.isConnecting.value) return 'Connecting...';
+    if (inQueue.value) return 'Looking for opponent...';
+    if (gameActive.value) return 'In Game';
+    return `Find Match (${authStore.username})`;
   });
 
-  public connectedText = computed(() => {
-    return this.webSocketService.isConnected.value ? 'Connected to server' : 'Not connected to server';
+  const reconnectButtonText = computed(() => 'Reconnect');
+  const disconnectButtonText = computed(() => 'Disconnect');
+
+  const connectedText = computed(() => {
+    return webSocketService.isConnected.value ? 'Connected to server' : 'Not connected to server';
   });
 
-  constructor(webSocketService: IWebSocketService) {
-    this.webSocketService = webSocketService;
+  // Initialize the game
+  const initialize = (): void => {
+    registerWebSocketHandlers();
+    registerDisconnectionHandler();
+    connect();
+    gameStore.resetGame();
+  };
 
-    // Setup error handling from WebSocketService
-    this.setupErrorHandling();
-  }
+  // Connect to WebSocket
+  const connect = (): void => {
+    console.log('Connecting to WebSocket...');
+    webSocketService.connect(authStore.playerId);
+  };
 
-  public initialize(): void {
-    this.registerWebSocketHandlers();
-    this.connect();
-    this.gameStore.resetGame();
-  }
+  // Disconnect from WebSocket
+  const disconnect = (): void => {
+    console.log('Disconnecting from WebSocket...');
+    webSocketService.disconnect();
 
-  public connect(): void {
-    this.webSocketService.connect(this.authStore.playerId);
-  }
+    // If in a game, handle the disconnect as a forfeit
+    if (gameActive.value) {
+      handleGameDisconnect();
+    }
+  };
 
-  public handleMatchmaking = () => {
-    if (!this.webSocketService.isConnected.value || this.gameActive.value) return;
+  // Handle game disconnection
+  const handleGameDisconnect = (): void => {
+    if (gameActive.value) {
+      displayMessage.value = 'Game over! You lost due to connection problems.';
+      gameStore.resetGame();
+      inQueue.value = false;
+    }
+  };
 
-    this.inQueue.value = true;
+  // Register disconnection handler
+  const registerDisconnectionHandler = (): void => {
+    // Register handler for unexpected disconnections
+    webSocketService.registerDisconnectHandler(() => {
+      if (gameActive.value) {
+        handleGameDisconnect();
+      }
+    });
+
+    // Also watch the connected state to handle disconnections
+    watch(webSocketService.isConnected, (connected, prevConnected) => {
+      if (prevConnected && !connected && gameActive.value) {
+        // We were connected, then disconnected while in a game
+        handleGameDisconnect();
+      }
+    });
+  };
+
+  // Start matchmaking
+  const handleMatchmaking = (): void => {
+    if (!webSocketService.isConnected.value || gameActive.value) return;
+
+    inQueue.value = true;
 
     const message = {
       type: 'JOIN_MATCHMAKING',
-      playerId: this.authStore.playerId
+      playerId: authStore.playerId
     };
 
-    this.webSocketService.sendMessage(message);
-  }
+    webSocketService.sendMessage(message);
+  };
 
-  private setupErrorHandling(): void {
-    // Watch for WebSocketService errors and propagate them to our ViewModel
-    watch(this.webSocketService.error, (error) => {
+  // Setup error handling
+  const setupErrorHandling = (): void => {
+    watch(webSocketService.error, (error) => {
       if (error) {
-        this.errorMessage.value = error instanceof Error
+        errorMessage.value = error instanceof Error
           ? error.message
           : 'Connection error. Please try again later.';
         console.error('WebSocket error in GameViewModel:', error);
       } else {
-        this.errorMessage.value = '';
+        errorMessage.value = '';
       }
     });
-  }
+  };
 
-  private registerWebSocketHandlers(): void {
-    // Handle "in queue" messages
-    this.webSocketService.registerMessageHandler(
+  // Register WebSocket message handlers
+  const registerWebSocketHandlers = (): void => {
+    webSocketService.registerMessageHandler(
       WebSocketMessageType.IN_QUEUE,
-      this.handleInQueueMessage.bind(this)
+      handleInQueueMessage
     );
 
-    // Handle "match found" messages
-    this.webSocketService.registerMessageHandler(
+    webSocketService.registerMessageHandler(
       WebSocketMessageType.MATCH_FOUND,
-      this.handleMatchFoundMessage.bind(this)
+      handleMatchFoundMessage
     );
 
-    // Handle "already in queue" messages
-    this.webSocketService.registerMessageHandler(
+    webSocketService.registerMessageHandler(
       WebSocketMessageType.ALREADY_IN_QUEUE,
-      this.handleAlreadyInQueueMessage.bind(this)
+      handleAlreadyInQueueMessage
     );
 
-    // Handle "play move" messages
-    this.webSocketService.registerMessageHandler(
+    webSocketService.registerMessageHandler(
       WebSocketMessageType.PLAY_MOVE,
-      this.handlePlayMoveMessage.bind(this)
+      handlePlayMoveMessage
     );
 
-    // Handle "game ended" messages
-    this.webSocketService.registerMessageHandler(
+    webSocketService.registerMessageHandler(
       WebSocketMessageType.GAME_ENDED,
-      this.handleGameEndedMessage.bind(this)
+      handleGameEndedMessage
     );
-  }
+  };
 
-  // Individual message handlers for better separation of concerns
-  private handleInQueueMessage(payload: WebSocketInQueueMessage['payload']): void {
-    this.displayMessage.value = payload.message;
-  }
+  // Individual message handlers
+  const handleInQueueMessage = (payload: WebSocketInQueueMessage['payload']): void => {
+    displayMessage.value = payload.message;
+  };
 
-  private handleMatchFoundMessage(payload: any): void {
+  const handleMatchFoundMessage = (payload: any): void => {
     const matchFoundMessage = {
       type: WebSocketMessageType.MATCH_FOUND,
       payload
     } as WebSocketMatchFoundMessage;
 
-    this.inQueue.value = false;
-    this.gameStore.setGame(matchFoundMessage);
-    this.displayMessage.value = `Match found! Your opponent is ${this.gameStore.getOpponent()?.username}`;
+    inQueue.value = false;
+    gameStore.setGame(matchFoundMessage);
+    displayMessage.value = `Match found! Your opponent is ${gameStore.getOpponent()?.username}`;
 
-    if (this.gameStore.isYourTurn()) {
-      this.displayMessage.value += ". It's your turn!";
+    if (gameStore.isYourTurn()) {
+      displayMessage.value += ". It's your turn!";
     } else {
-      this.displayMessage.value += ". Waiting for opponent's move...";
+      displayMessage.value += ". Waiting for opponent's move...";
     }
-  }
+  };
 
-  private handleAlreadyInQueueMessage(): void {
-    this.displayMessage.value = 'You are already in the matchmaking queue.';
-  }
+  const handleAlreadyInQueueMessage = (): void => {
+    displayMessage.value = 'You are already in the matchmaking queue.';
+  };
 
-  private handlePlayMoveMessage(payload: WebSocketPlayMovePayload): void {
-    this.gameStore.playMove(payload);
+  const handlePlayMoveMessage = (payload: WebSocketPlayMovePayload): void => {
+    gameStore.playMove(payload);
 
     // Update display message based on whose turn it is
-    if (this.gameStore.isYourTurn()) {
-      this.displayMessage.value = "It's your turn!";
+    if (gameStore.isYourTurn()) {
+      displayMessage.value = "It's your turn!";
     } else {
-      this.displayMessage.value = "Waiting for opponent's move...";
+      displayMessage.value = "Waiting for opponent's move...";
     }
-  }
+  };
 
-  private handleGameEndedMessage(payload: GameEndedPayload): void {
+  const handleGameEndedMessage = (payload: GameEndedPayload): void => {
     const winnerId = payload.winner?.id;
 
     if (!winnerId) {
-      this.displayMessage.value = 'Game over! It\'s a draw!';
-    } else if (winnerId === this.authStore.playerId) {
-      this.displayMessage.value = 'Game over! You win!';
+      displayMessage.value = 'Game over! It\'s a draw!';
+    } else if (winnerId === authStore.playerId) {
+      displayMessage.value = 'Game over! You win!';
     } else {
-      this.displayMessage.value = 'Game over! You lose!';
+      displayMessage.value = 'Game over! You lose!';
     }
 
+    gameStore.resetGame();
+
     // Reset queue state
-    this.inQueue.value = false;
-  }
+    inQueue.value = false;
+  };
+
+  // Setup error handling on creation
+  setupErrorHandling();
+
+  return {
+    // State
+    displayMessage,
+    inQueue,
+    errorMessage,
+    gameActive,
+
+    //webSocketService state
+    isConnected: webSocketService.isConnected,
+    isConnecting: webSocketService.isConnecting,
+
+    // Computed properties
+    matchmakingButtonText,
+    reconnectButtonText,
+    disconnectButtonText,
+    connectedText,
+
+    // Methods
+    initialize,
+    connect,
+    disconnect,
+    handleMatchmaking,
+  };
 }

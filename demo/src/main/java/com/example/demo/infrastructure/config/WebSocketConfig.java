@@ -26,7 +26,7 @@ public class WebSocketConfig implements WebSocketConfigurer {
     }
 
     @Bean
-    public ServerEndpointExporter serverEndpointExporter() {
+    ServerEndpointExporter serverEndpointExporter() {
         return new ServerEndpointExporter();
     }
 }

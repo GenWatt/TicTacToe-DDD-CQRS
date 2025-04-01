@@ -27,7 +27,7 @@ public class PlayerRepositoryImpl implements PlayerRepository {
 
         @Override
         public Uni<Player> findById(PlayerId id) {
-                return sessionFactory.withSession(session -> session.find(PlayerEntity.class, id.getId())
+                return sessionFactory.withSession(session -> session.find(PlayerEntity.class, id)
                                 .map(entity -> entity != null ? playerMapper.toDomain(entity) : null));
         }
 
@@ -47,7 +47,7 @@ public class PlayerRepositoryImpl implements PlayerRepository {
         @Override
         public Uni<Player> save(Player player) {
                 PlayerEntity entity = playerMapper.toEntity(player);
-                System.out.println("Saving player: " + entity);
+
                 return sessionFactory.withSession(session -> session.persist(entity)
                                 .chain(session::flush)
                                 .map(v -> player));

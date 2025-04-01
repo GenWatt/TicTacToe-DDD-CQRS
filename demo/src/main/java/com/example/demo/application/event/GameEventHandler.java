@@ -2,11 +2,10 @@ package com.example.demo.application.event;
 
 import com.example.demo.application.dto.GameEndedResponseDto;
 import com.example.demo.application.dto.MakeMoveResponseDto;
-import com.example.demo.domain.dto.GameStateDto;
+import com.example.demo.domain.event.GameEndedByDisconnectionEvent;
 import com.example.demo.domain.event.GameEndedEvent;
 import com.example.demo.domain.event.MovePlayedEvent;
-import com.example.demo.domain.service.GameService;
-import com.example.demo.infrastructure.websocket.GameWebSocketHandler;
+import com.example.demo.infrastructure.websocket.WebSocketSessionService;
 import com.example.demo.infrastructure.websocket.message.WebSocketResponse;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -21,7 +20,7 @@ import org.springframework.stereotype.Component;
 @Component
 @RequiredArgsConstructor
 public class GameEventHandler {
-    private final GameWebSocketHandler webSocketHandler;
+    private final WebSocketSessionService webSocketHandler;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Async
@@ -55,6 +54,33 @@ public class GameEventHandler {
     @EventListener
     public void handleGameEndedEvent(GameEndedEvent event) {
         log.info("Game {} ended. Winner: {}", event.getGame().getId().getId(),
+                event.getWinnerId() != null ? event.getWinnerId() : "Draw");
+
+        try {
+            GameEndedResponseDto responseDto = new GameEndedResponseDto(
+                    event.getGame().getBoard(),
+                    event.getWinnerId(),
+                    event.getGame().getState());
+
+            String payload = objectMapper.writeValueAsString(responseDto);
+
+            WebSocketResponse response = new WebSocketResponse("GAME_ENDED", payload);
+
+            log.info("Sending game ended notification to {} players", event.getGame().getPlayerIds().size());
+
+            event.getGame().getPlayerIds().forEach(playerId -> {
+                log.info("Sending game ended notification to player {}", playerId);
+                webSocketHandler.sendToPlayer(playerId, response);
+            });
+        } catch (JsonProcessingException e) {
+            log.error("Error serializing game ended response", e);
+        }
+    }
+
+    @Async
+    @EventListener
+    public void handleGameEndedByDisconnectionEvent(GameEndedByDisconnectionEvent event) {
+        log.info("Game {} ended by disconnection. Winner: {}", event.getGame().getId().getId(),
                 event.getWinnerId() != null ? event.getWinnerId() : "Draw");
 
         try {
