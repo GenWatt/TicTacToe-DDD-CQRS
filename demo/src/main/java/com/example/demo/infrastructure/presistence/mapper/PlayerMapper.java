@@ -10,7 +10,8 @@ import com.example.demo.infrastructure.presistence.entity.PlayerEntity;
 @Component
 public class PlayerMapper {
     public Player toDomain(PlayerEntity entity) {
-        Player player = Player.reconstruct(entity.getId(), entity.getUsername());
+        Player player = Player.reconstruct(entity.getId(), entity.getUsername(), entity.getPlayerType(),
+                new ArrayList<>(), entity.getCreatedAt(), entity.getUpdatedAt());
         return player;
     }
 

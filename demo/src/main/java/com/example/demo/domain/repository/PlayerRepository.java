@@ -16,4 +16,6 @@ public interface PlayerRepository {
     Uni<List<Player>> findAllByIds(List<PlayerId> ids);
 
     Uni<Player> save(Player player);
+
+    Uni<Player> update(Player player);
 }

@@ -40,7 +40,7 @@ export const useGameStore = defineStore('game', () => {
     function setGame(message: WebSocketMatchFoundMessage) {
         const payload = message.payload;
 
-
+        console.log('setGame', payload);
         gameId.value = payload.gameId;
         gameState.value = payload.gameState;
         player.value = payload.you;

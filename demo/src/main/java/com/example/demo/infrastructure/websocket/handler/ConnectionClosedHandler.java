@@ -25,7 +25,7 @@ public class ConnectionClosedHandler implements WebSocketMessageHandler {
     private final ApplicationEventPublisher eventPublisher;
 
     @Override
-    public void handle(WebSocketSession session, String payload) throws Exception {
+    public void handle(WebSocketSession session, String payload) {
         PlayerId playerId = sessionService.getPlayerIdBySession(session);
 
         if (playerId == null) {

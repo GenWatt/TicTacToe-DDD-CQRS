@@ -1,4 +1,4 @@
-package com.example.demo.application;
+package com.example.demo.application.mediator;
 
 import com.example.demo.application.command.Command;
 import com.example.demo.application.handler.CommandHandler;
@@ -24,6 +24,7 @@ public class Mediator {
         // Register all command handlers
         applicationContext.getBeansOfType(CommandHandler.class).values().forEach(handler -> {
             Class<?>[] generics = GenericTypeResolver.resolveTypeArguments(handler.getClass(), CommandHandler.class);
+
             if (generics != null && generics.length == 2) {
                 commandHandlers.put(generics[0], handler);
                 log.info("Registered command handler: {} for command: {}",
@@ -34,6 +35,7 @@ public class Mediator {
         // Register all query handlers
         applicationContext.getBeansOfType(QueryHandler.class).values().forEach(handler -> {
             Class<?>[] generics = GenericTypeResolver.resolveTypeArguments(handler.getClass(), QueryHandler.class);
+
             if (generics != null && generics.length == 2) {
                 queryHandlers.put(generics[0], handler);
                 log.info("Registered query handler: {} for query: {}",

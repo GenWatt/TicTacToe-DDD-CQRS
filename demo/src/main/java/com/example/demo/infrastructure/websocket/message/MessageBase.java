@@ -12,8 +12,7 @@ import lombok.NoArgsConstructor;
         @JsonSubTypes.Type(value = JoinMatchmakingMessage.class, name = "JOIN_MATCHMAKING"),
         @JsonSubTypes.Type(value = LeaveMatchmakingMessage.class, name = "LEAVE_MATCHMAKING"),
         @JsonSubTypes.Type(value = PlayMoveMessage.class, name = "PLAY_MOVE"),
-        @JsonSubTypes.Type(value = JoinGameMessage.class, name = "JOIN_GAME"),
-        @JsonSubTypes.Type(value = LeaveGameMessage.class, name = "LEAVE_GAME"),
+// @JsonSubTypes.Type(value = LeaveGameMessage.class, name = "LEAVE_GAME"),
 })
 @Getter
 @NoArgsConstructor

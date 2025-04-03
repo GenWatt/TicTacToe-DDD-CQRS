@@ -37,11 +37,7 @@ public class WebSocketMessageDispatcher {
         WebSocketMessageHandler handler = handlers.get(messageType);
 
         if (handler != null) {
-            try {
-                handler.handle(session, payload);
-            } catch (Exception e) {
-                log.error("Error handling message of type {}", messageType, e);
-            }
+            handler.handle(session, payload);
         } else {
             log.warn("No handler found for message type: {}", messageType);
         }

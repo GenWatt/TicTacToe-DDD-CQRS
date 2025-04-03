@@ -7,5 +7,5 @@ public enum MessageType {
     LEAVE_GAME,
     PLAY_MOVE,
     CONNECTION_ESTABLISHED,
-    CONNECTION_CLOSED,
+    CONNECTION_CLOSED
 }

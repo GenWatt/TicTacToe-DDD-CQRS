@@ -4,6 +4,7 @@ export enum WebSocketMessageType {
     ALREADY_IN_QUEUE = 'ALREADY_IN_QUEUE',
     PLAY_MOVE = 'PLAY_MOVE',
     GAME_ENDED = 'GAME_ENDED',
+    ERROR = 'ERROR',
 }
 
 export type WebSocketInQueueMessage = {
@@ -96,4 +97,13 @@ export type GameEndedPayload = {
     board: Board;
     winner: { id: string } | null;
     gameState: GameState;
+}
+
+export type WebSocketErrorMessage = {
+    type: WebSocketMessageType.ERROR;
+    payload: WebSocketErrorMessagePayload;
+}
+
+export type WebSocketErrorMessagePayload = {
+    message: string;
 }

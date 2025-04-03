@@ -36,7 +36,7 @@
 import { storeToRefs } from 'pinia';
 import { useGameStore } from '../stores/useGameStore';
 import { useAuthStore } from '../stores/useAuthStore';
-import { ref, inject } from 'vue';
+import { ref } from 'vue';
 import { webSocketService } from '../gameWebsocketService';
 
 const gameStore = useGameStore();
@@ -51,6 +51,7 @@ const getCellContent = (row: number, col: number): string => {
     }
 
     const value = board.value.board[row][col]?.id;
+    console.log('getCellContent', value, player.value, opponent.value);
     if (value === player.value?.playerId) {
         return player.value.playerType;
     } else if (value === opponent.value?.playerId) {

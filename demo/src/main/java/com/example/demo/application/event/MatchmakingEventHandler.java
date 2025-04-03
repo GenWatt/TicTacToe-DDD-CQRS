@@ -12,11 +12,11 @@ import com.example.demo.domain.event.PlayerMatchedEvent;
 import com.example.demo.domain.repository.PlayerRepository;
 import com.example.demo.domain.valueObject.PlayerId;
 import com.example.demo.domain.valueObject.PlayerType;
-import com.example.demo.infrastructure.websocket.WebSocketSessionService;
-import com.example.demo.infrastructure.websocket.message.WebSocketResponse;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.example.demo.infrastructure.websocket.service.WebSocketMessageService;
 
+import io.smallrye.mutiny.Uni;
+import io.smallrye.mutiny.tuples.Tuple2;
+import io.smallrye.mutiny.tuples.Tuple3;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import java.util.List;
@@ -30,10 +30,9 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class MatchmakingEventHandler {
 
-    private final WebSocketSessionService webSocketHandler;
+    private final WebSocketMessageService wesocketMessageService;
     private final CreateGameCommandHandler createGameCommandHandler;
     private final PlayerRepository playerRepository;
-    private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Async
     @EventListener
@@ -43,16 +42,7 @@ public class MatchmakingEventHandler {
                 .message("You have joined the matchmaking queue")
                 .build();
 
-        String payload = null;
-
-        try {
-            payload = objectMapper.writeValueAsString(response);
-        } catch (JsonProcessingException e) {
-            log.error("Error serializing InQueueResponseDto", e);
-        }
-
-        WebSocketResponse responseMessage = new WebSocketResponse("IN_QUEUE", payload);
-        webSocketHandler.sendToPlayer(event.getPlayerId(), responseMessage);
+        wesocketMessageService.sendToPlayer(event.getPlayerId(), "IN_QUEUE", response);
     }
 
     @Async
@@ -60,76 +50,105 @@ public class MatchmakingEventHandler {
     public void handlePlayerMatched(PlayerMatchedEvent event) {
         log.info("Players {} and {} matched", event.getPlayer1Id(), event.getPlayer2Id());
 
-        List<PlayerId> players = List.of(event.getPlayer1Id(), event.getPlayer2Id());
-        CreateGameCommand command = new CreateGameCommand(event.getGameId(), players);
+        List<PlayerId> playerIds = List.of(event.getPlayer1Id(), event.getPlayer2Id());
+        CreateGameCommand command = new CreateGameCommand(event.getGameId(), playerIds);
 
-        // First, fetch players' details
-        playerRepository.findAllByIds(players)
-                .subscribe().with(playerList -> {
-                    // Then create the game
-                    createGameCommandHandler.handle(command)
-                            .subscribe().with(game -> {
-                                try {
-                                    // Find the players in the list
-                                    var player1 = playerList.stream()
-                                            .filter(p -> p.getId().equals(event.getPlayer1Id()))
-                                            .findFirst()
-                                            .orElseThrow();
+        playerRepository.findAllByIds(playerIds)
+                .flatMap(players -> createGameCommandHandler.handle(command)
+                        .map(game -> Tuple2.of(game, players)))
+                .flatMap(tuple -> {
+                    Game game = tuple.getItem1();
+                    List<Player> players = tuple.getItem2();
 
-                                    var player2 = playerList.stream()
-                                            .filter(p -> p.getId().equals(event.getPlayer2Id()))
-                                            .findFirst()
-                                            .orElseThrow();
+                    return processMatch(game, players, event);
+                })
+                .subscribe().with(
+                        success -> log.info(
+                                "Successfully processed match for players {} and {}",
+                                event.getPlayer1Id(), event.getPlayer2Id()),
+                        error -> log.error("Error processing player match", error));
+    }
 
-                                    if (game.getCurrentPlayerMoveId().equals(player1.getId())) {
-                                        player1.setPlayerType(PlayerType.O);
-                                        player2.setPlayerType(PlayerType.X);
-                                    } else {
-                                        player1.setPlayerType(PlayerType.X);
-                                        player2.setPlayerType(PlayerType.O);
-                                    }
+    private Uni<Void> processMatch(Game game, List<Player> playerList, PlayerMatchedEvent event) {
+        // Find players reactively with error handling
+        Uni<Player> player1Uni = Uni.createFrom().item(() -> playerList.stream()
+                .filter(p -> p.getId().equals(event.getPlayer1Id()))
+                .findFirst()
+                .orElse(null)).onItem().ifNull()
+                .failWith(() -> new IllegalStateException("Player 1 not found"));
 
-                                    // Save the players with their assigned types
-                                    playerRepository.save(player1).subscribe();
-                                    playerRepository.save(player2).subscribe();
+        Uni<Player> player2Uni = Uni.createFrom().item(() -> playerList.stream()
+                .filter(p -> p.getId().equals(event.getPlayer2Id()))
+                .findFirst()
+                .orElse(null)).onItem().ifNull()
+                .failWith(() -> new IllegalStateException("Player 2 not found"));
 
-                                    // Send player1 their personalized view
-                                    sendPersonalizedMatchResponse(game, player1, player2);
+        // Combine players and then process
+        return Uni.combine().all().unis(player1Uni, player2Uni)
+                .asTuple()
+                .flatMap(tuple -> {
+                    Player player1 = tuple.getItem1();
+                    Player player2 = tuple.getItem2();
 
-                                    // Send player2 their personalized view
-                                    sendPersonalizedMatchResponse(game, player2, player1);
+                    // Assign player types
+                    if (game.getCurrentPlayerMoveId().equals(player1.getId())) {
+                        player1.setPlayerType(PlayerType.O);
+                        player2.setPlayerType(PlayerType.X);
+                    } else {
+                        player1.setPlayerType(PlayerType.X);
+                        player2.setPlayerType(PlayerType.O);
+                    }
 
-                                } catch (Exception e) {
-                                    log.error("Error creating match notification", e);
-                                }
-                            });
+                    // Save both players reactively
+                    return Uni.combine().all()
+                            .unis(
+                                    playerRepository.save(player1),
+                                    playerRepository.save(player2))
+                            .asTuple()
+                            .map(savedTuple -> Tuple3.of(game, savedTuple.getItem1(),
+                                    savedTuple.getItem2()));
+                })
+                .flatMap(tuple -> {
+                    Game savedGame = tuple.getItem1();
+                    Player savedPlayer1 = tuple.getItem2();
+                    Player savedPlayer2 = tuple.getItem3();
+
+                    log.info("Game {} created with players {} and {}", savedGame.getId(),
+                            savedPlayer1.getPlayerType(), savedPlayer2.getPlayerType());
+                    // Send match notifications to both players
+                    return Uni.combine().all().unis(
+                            Uni.createFrom().item(() -> {
+                                sendPersonalizedMatchResponse(savedGame, savedPlayer1,
+                                        savedPlayer2);
+                                return null;
+                            }),
+                            Uni.createFrom().item(() -> {
+                                sendPersonalizedMatchResponse(savedGame, savedPlayer2,
+                                        savedPlayer1);
+                                return null;
+                            })).asTuple().replaceWithVoid();
                 });
     }
 
     private void sendPersonalizedMatchResponse(Game game, Player player, Player opponent) {
-        try {
-            var dto = MatchFoundResponseDto.builder()
-                    .gameId(game.getId().getId().toString())
-                    .gameState(game.getState())
-                    .board(game.getBoard())
-                    .moves(game.getMoves())
-                    .currentPlayerMoveId(game.getCurrentPlayerMoveId().getId().toString())
-                    .you(PlayerDto.builder()
-                            .playerId(player.getId().getId())
-                            .username(player.getUsername().getUsername())
-                            .playerType(player.getPlayerType())
-                            .build())
-                    .opponent(PlayerDto.builder()
-                            .playerId(opponent.getId().getId())
-                            .username(opponent.getUsername().getUsername())
-                            .playerType(opponent.getPlayerType())
-                            .build())
-                    .build();
+        var dto = MatchFoundResponseDto.builder()
+                .gameId(game.getId().getId().toString())
+                .gameState(game.getState())
+                .board(game.getBoard())
+                .moves(game.getMoves())
+                .currentPlayerMoveId(game.getCurrentPlayerMoveId().getId().toString())
+                .you(PlayerDto.builder()
+                        .playerId(player.getId().getId())
+                        .username(player.getUsername().getUsername())
+                        .playerType(player.getPlayerType())
+                        .build())
+                .opponent(PlayerDto.builder()
+                        .playerId(opponent.getId().getId())
+                        .username(opponent.getUsername().getUsername())
+                        .playerType(opponent.getPlayerType())
+                        .build())
+                .build();
 
-            String payload = objectMapper.writeValueAsString(dto);
-            webSocketHandler.sendToPlayer(player.getId(), new WebSocketResponse("MATCH_FOUND", payload));
-        } catch (JsonProcessingException e) {
-            log.error("Error serializing match data for player {}", player.getId(), e);
-        }
+        wesocketMessageService.sendToPlayer(player.getId(), "MATCH_FOUND", dto);
     }
 }

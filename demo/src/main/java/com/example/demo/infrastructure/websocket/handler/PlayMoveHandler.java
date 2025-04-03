@@ -8,7 +8,6 @@ import com.example.demo.infrastructure.websocket.WebSocketSessionService;
 import com.example.demo.infrastructure.websocket.message.MessageType;
 import com.example.demo.infrastructure.websocket.message.PlayMoveMessage;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.WebSocketSession;
@@ -16,17 +15,23 @@ import org.springframework.web.socket.WebSocketSession;
 @Slf4j
 @Component
 @MessageTypeHandler(MessageType.PLAY_MOVE)
-@RequiredArgsConstructor
-public class PlayMoveHandler implements WebSocketMessageHandler {
+public class PlayMoveHandler extends AbstractMessageHandler<PlayMoveMessage> {
 
-    private final ObjectMapper objectMapper = new ObjectMapper();
     private final GameService gameService;
     private final WebSocketSessionService sessionService;
 
+    public PlayMoveHandler(
+            ObjectMapper objectMapper,
+            GameService gameService,
+            WebSocketSessionService sessionService) {
+
+        super(objectMapper, sessionService, PlayMoveMessage.class);
+        this.gameService = gameService;
+        this.sessionService = sessionService;
+    }
+
     @Override
-    public void handle(WebSocketSession session, String payload) throws Exception {
-        log.info("Handling play move message: {}", payload);
-        PlayMoveMessage message = objectMapper.readValue(payload, PlayMoveMessage.class);
+    public void handleMessage(WebSocketSession session, PlayMoveMessage message) {
         PlayerId playerId = sessionService.getPlayerIdBySession(session);
 
         if (playerId == null) {

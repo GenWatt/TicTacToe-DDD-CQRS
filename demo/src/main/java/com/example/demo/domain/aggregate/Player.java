@@ -41,11 +41,22 @@ public class Player extends AggregateRoot<PlayerId> {
         this.username = username;
     }
 
+    private Player(PlayerId playerId, Username username, PlayerType playerType, List<Game> games,
+            LocalDateTime createdAt, LocalDateTime updatedAt) {
+        super(playerId, 1);
+        this.username = username;
+        this.playerType = playerType;
+        this.games = games;
+        this.createdAt = createdAt;
+        this.updatedAt = updatedAt;
+    }
+
     public static Player create(Username username) {
         return new Player(PlayerId.create(), username);
     }
 
-    public static Player reconstruct(PlayerId playerId, Username username) {
-        return new Player(playerId, username);
+    public static Player reconstruct(PlayerId playerId, Username username, PlayerType playerType, List<Game> games,
+            LocalDateTime createdAt, LocalDateTime updatedAt) {
+        return new Player(playerId, username, playerType, games, createdAt, updatedAt);
     }
 }

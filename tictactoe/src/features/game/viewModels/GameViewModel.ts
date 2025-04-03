@@ -6,7 +6,8 @@ import {
   WebSocketMatchFoundMessage,
   WebSocketPlayMovePayload,
   GameEndedPayload,
-  WebSocketInQueueMessage
+  WebSocketInQueueMessage,
+  WebSocketErrorMessagePayload
 } from '../../../types';
 import { webSocketService } from '../../../gameWebsocketService';
 
@@ -167,6 +168,14 @@ export function useGameViewModel(): GameViewModel {
       WebSocketMessageType.GAME_ENDED,
       handleGameEndedMessage
     );
+
+    webSocketService.registerMessageHandler(
+      WebSocketMessageType.ERROR,
+      (payload: WebSocketErrorMessagePayload) => {
+        errorMessage.value = payload.message;
+        console.error('WebSocket error:', payload.message);
+      }
+    )
   };
 
   // Individual message handlers

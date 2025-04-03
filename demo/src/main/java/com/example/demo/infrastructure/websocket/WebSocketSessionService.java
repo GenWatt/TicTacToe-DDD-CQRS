@@ -1,8 +1,11 @@
 package com.example.demo.infrastructure.websocket;
 
+import com.example.demo.application.dto.ErrorResponseDto;
 import com.example.demo.domain.valueObject.PlayerId;
 import com.example.demo.infrastructure.websocket.message.WebSocketResponse;
 import com.fasterxml.jackson.databind.ObjectMapper;
+
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.web.socket.TextMessage;
@@ -14,9 +17,10 @@ import java.util.concurrent.ConcurrentHashMap;
 
 @Slf4j
 @Service
+@RequiredArgsConstructor
 public class WebSocketSessionService {
 
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final ObjectMapper objectMapper;
     private final Map<String, WebSocketSession> sessions = new ConcurrentHashMap<>();
     private final Map<String, PlayerId> sessionToPlayerId = new ConcurrentHashMap<>();
     private final Map<PlayerId, WebSocketSession> playerIdToSession = new ConcurrentHashMap<>();
@@ -57,7 +61,16 @@ public class WebSocketSessionService {
     }
 
     public void sendErrorMessage(WebSocketSession session, String errorMessage) {
-        sendMessage(session, new WebSocketResponse("ERROR", errorMessage));
+        ErrorResponseDto errorResponse = ErrorResponseDto.builder()
+                .message(errorMessage)
+                .build();
+
+        try {
+            String json = objectMapper.writeValueAsString(errorResponse);
+            sendMessage(session, new WebSocketResponse("ERROR", json));
+        } catch (Exception e) {
+            log.error("Failed to send error message to session: {}", session.getId(), e);
+        }
     }
 
     public void sendMessage(WebSocketSession session, WebSocketResponse message) {
@@ -72,11 +85,11 @@ public class WebSocketSessionService {
     }
 
     public void sendToPlayer(PlayerId playerId, WebSocketResponse message) {
-        WebSocketSession session = playerIdToSession.get(playerId);
-        if (session != null && session.isOpen()) {
+        WebSocketSession session = getSessionByPlayerId(playerId);
+        if (session != null) {
             sendMessage(session, message);
         } else {
-            log.warn("Unable to send message to player {}: no open session found", playerId);
+            log.warn("No session found for player: {}", playerId);
         }
     }
 }

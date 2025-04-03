@@ -18,7 +18,7 @@ public class ConnectionEstablisedHandler implements WebSocketMessageHandler {
     private final WebSocketSessionService sessionService;
 
     @Override
-    public void handle(WebSocketSession session, String payload) throws Exception {
+    public void handle(WebSocketSession session, String payload) {
         sessionService.registerSession(session);
         log.info("WebSocket connection established: {}", session.getId());
     }
