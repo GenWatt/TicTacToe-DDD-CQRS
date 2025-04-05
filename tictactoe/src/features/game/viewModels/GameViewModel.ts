@@ -73,7 +73,7 @@ export function useGameViewModel(): GameViewModel {
   // Connect to WebSocket
   const connect = (): void => {
     console.log('Connecting to WebSocket...');
-    webSocketService.connect(authStore.playerId);
+    webSocketService.connect(authStore.playerId, authStore.token);
   };
 
   // Disconnect from WebSocket

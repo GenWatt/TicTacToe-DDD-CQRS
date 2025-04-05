@@ -19,19 +19,20 @@ import { storeToRefs } from 'pinia';
 import { useRouter } from 'vue-router';
 import TicTacToe from '../components/TicTacToe.vue';
 import { onMounted } from 'vue';
+import { webSocketService } from '../gameWebsocketService';
 
 const router = useRouter();
 const authStore = useAuthStore();
-// Using storeToRefs makes the properties reactive
+
 const { username } = storeToRefs(authStore);
 
 const logout = () => {
   authStore.clearAuth();
+    webSocketService.disconnect();
   router.push('/login');
 };
 
 onMounted(() => {
-    // If already authenticated, redirect to game
     if (authStore.isAuthenticated) {
         router.push('/');
     }

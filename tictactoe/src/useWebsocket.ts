@@ -10,7 +10,7 @@ export interface WebSocketServiceState {
 }
 
 export interface WebSocketService extends WebSocketServiceState {
-    connect: (playerId?: string | null) => void;
+    connect: (playerId?: string | null, token?: string | null) => void;
     disconnect: () => void;
     sendMessage: (data: any) => void;
     registerMessageHandler: (type: WebSocketMessageType, handler: (payload: any) => void) => void;
@@ -43,7 +43,7 @@ export function useWebSocketService(
     const messageHandlers: Map<WebSocketMessageType, (payload: any) => void> = new Map();
     const disconnectHandlers: Array<() => void> = [];
 
-    const connect = (playerId?: string | null): void => {
+    const connect = (playerId?: string | null, token?: string | null): void => {
         console.log('Connecting to WebSocket...');
         if (socket.value && (socket.value.readyState === WebSocket.OPEN || socket.value.readyState === WebSocket.CONNECTING)) {
             console.warn('WebSocket is already connected or connecting');
@@ -54,13 +54,14 @@ export function useWebSocketService(
 
         try {
             isConnecting.value = true;
-            const fullUrl = buildWebSocketUrl(url, playerId);
+            console.log('WebSocket URL:', url, playerId, token);
+            const fullUrl = buildWebSocketUrl(url, playerId, token);
 
             console.log('Connecting to WebSocket:', fullUrl.toString());
             socket.value = new WebSocket(fullUrl);
-
             setupSocketEventHandlers();
         } catch (err) {
+            console.log('Error creating WebSocket:', err);
             handleConnectionError(err);
         }
     };
@@ -107,11 +108,17 @@ export function useWebSocketService(
         messageHandlers.set(type, handler);
     };
 
-    const buildWebSocketUrl = (baseUrl: string, playerId?: string | null): URL => {
+    const buildWebSocketUrl = (baseUrl: string, playerId?: string | null, token?: string | null): URL => {
         const fullUrl = new URL(baseUrl);
+
         if (playerId) {
             fullUrl.searchParams.set('playerId', playerId);
         }
+
+        if (token) {
+            fullUrl.searchParams.set('token', token);
+        }
+
         return fullUrl;
     };
 
@@ -127,7 +134,6 @@ export function useWebSocketService(
     const handleConnectionError = (err: unknown): void => {
         error.value = err instanceof Error ? err : new Error(String(err));
         isConnecting.value = false;
-        console.error('WebSocket connection error:', err);
         disconnected.value = true;
         notifyDisconnectHandlers();
     };
@@ -172,8 +178,13 @@ export function useWebSocketService(
         });
     };
 
-    const handleError = (event: Event): void => {
-        console.error('WebSocket error:', event);
+    const handleError = (event: any): void => {
+        if (event.target.readyState === WebSocket.CLOSED) {
+            console.error('WebSocket closed unexpectedly:', event);
+            error.value = new Error('You are not authenticated. Please log in again.');
+            return;
+        }
+
         error.value = event;
     };
 

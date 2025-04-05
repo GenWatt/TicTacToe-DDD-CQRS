@@ -2,6 +2,7 @@ package com.example.demo.api.controller;
 
 import com.example.demo.api.dto.CreatePlayerRequest;
 import com.example.demo.api.dto.LoginPlayerRequest;
+import com.example.demo.api.dto.LoginResponse;
 import com.example.demo.api.dto.PlayerResponse;
 import com.example.demo.api.mapper.PlayerDtoMapper;
 import com.example.demo.application.command.CreatePlayerCommand;
@@ -30,7 +31,8 @@ public class PlayerController {
     @ResponseStatus(HttpStatus.CREATED)
     public CompletableFuture<PlayerResponse> createPlayer(@RequestBody CreatePlayerRequest request) {
         CreatePlayerCommand command = new CreatePlayerCommand(
-                Username.from(request.getUsername()));
+                Username.from(request.getUsername()),
+                request.getPassword());
 
         return mediator.send(command)
                 .onItem().transform(playerDtoMapper::toResponse)
@@ -50,12 +52,16 @@ public class PlayerController {
 
     @PostMapping("/login")
     @ResponseStatus(HttpStatus.OK)
-    public CompletableFuture<PlayerResponse> login(@RequestBody LoginPlayerRequest request) {
+    public CompletableFuture<LoginResponse> login(@RequestBody LoginPlayerRequest request) {
         Username username = Username.from(request.getUsername());
-        LoginPlayerCommand command = new LoginPlayerCommand(username);
+        LoginPlayerCommand command = new LoginPlayerCommand(username, request.getPassword());
 
         return mediator.send(command)
-                .onItem().transform(playerDtoMapper::toResponse)
+                .onItem()
+                .transform(loginResult -> new LoginResponse(
+                        loginResult.getPlayer().getUsername().getUsername(),
+                        loginResult.getToken(),
+                        loginResult.getPlayer().getId().getId().toString()))
                 .subscribeAsCompletionStage();
     }
 }

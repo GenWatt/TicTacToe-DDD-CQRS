@@ -5,12 +5,14 @@ import com.example.demo.infrastructure.websocket.WebSocketSessionService;
 import com.example.demo.infrastructure.websocket.message.WebSocketResponse;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+
+import io.smallrye.mutiny.Uni;
+import io.smallrye.mutiny.infrastructure.Infrastructure;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.util.Collection;
-import java.util.function.Consumer;
 
 @Slf4j
 @Service
@@ -26,12 +28,19 @@ public class WebSocketMessageService {
      * @param playerId    The player to send the message to
      * @param messageType The type of message
      * @param payload     The payload object (will be serialized to JSON)
+     * @return Uni<Void> that completes when the message is sent
      */
     public void sendToPlayer(PlayerId playerId, String messageType, Object payload) {
-        WebSocketResponse response = createResponse(messageType, payload);
-        if (response != null) {
-            sessionService.sendToPlayer(playerId, response);
-        }
+        log.info("Preparing to send {} message to player {}", messageType, playerId);
+        createResponse(messageType, payload)
+                .flatMap(response -> sessionService.sendToPlayer(playerId, response))
+                .onFailure().invoke(error -> log.error("Failed to send {} message to player {}: {}",
+                        messageType, playerId, error.getMessage()))
+                .onFailure().recoverWithNull()
+                .subscribe().with(
+                        success -> log.debug("Successfully sent {} message to player {}", messageType, playerId),
+                        error -> log.error("Error in subscription when sending to player {}: {}", playerId,
+                                error.getMessage()));
     }
 
     /**
@@ -42,35 +51,48 @@ public class WebSocketMessageService {
      * @param payload     The payload object (will be serialized to JSON)
      */
     public void sendToPlayers(Collection<PlayerId> playerIds, String messageType, Object payload) {
-        WebSocketResponse response = createResponse(messageType, payload);
-
-        if (response != null) {
-            playerIds.forEach(playerId -> sessionService.sendToPlayer(playerId, response));
-        }
+        log.info("Preparing to send {} message to {} players", messageType, playerIds.size());
+        createResponse(messageType, payload)
+                .flatMap(response -> {
+                    // Create a Uni for each player and combine them
+                    return Uni.join().all(
+                            playerIds.stream()
+                                    .map(playerId -> sessionService.sendToPlayer(playerId, response)
+                                            .onFailure()
+                                            .invoke(error -> log.error("Failed to send {} message to player {}: {}",
+                                                    messageType, playerId, error.getMessage()))
+                                            .onFailure().recoverWithNull())
+                                    .toList())
+                            .andCollectFailures()
+                            .replaceWithVoid();
+                })
+                .subscribe().with(
+                        success -> log.debug("Successfully sent {} message to all players", messageType),
+                        error -> log.error("Error in subscription when sending to multiple players: {}",
+                                error.getMessage()));
     }
 
     /**
-     * Executes an action with proper exception handling
+     * Creates a WebSocketResponse from a message type and payload.
+     * 
+     * @param messageType The type of message
+     * @param payload     The payload to serialize
+     * @return Uni<WebSocketResponse> with the created response
      */
-    public <T> void withErrorHandling(T data, Consumer<T> action, String operation) {
-        try {
-            action.accept(data);
-        } catch (Exception e) {
-            log.error("Error during {}", operation, e);
-        }
-    }
-
-    private WebSocketResponse createResponse(String messageType, Object payload) {
-        try {
-            if (payload instanceof String) {
-                return new WebSocketResponse(messageType, (String) payload);
-            } else {
-                String serialized = objectMapper.writeValueAsString(payload);
-                return new WebSocketResponse(messageType, serialized);
+    private Uni<WebSocketResponse> createResponse(String messageType, Object payload) {
+        return Uni.createFrom().item(() -> {
+            try {
+                if (payload instanceof String) {
+                    return new WebSocketResponse(messageType, (String) payload);
+                } else {
+                    String serialized = objectMapper.writeValueAsString(payload);
+                    log.debug("Serialized payload for {}: {}", messageType, serialized);
+                    return new WebSocketResponse(messageType, serialized);
+                }
+            } catch (JsonProcessingException e) {
+                log.error("Failed to serialize message payload of type {}", messageType, e);
+                throw new RuntimeException("Failed to serialize message payload of type " + messageType, e);
             }
-        } catch (JsonProcessingException e) {
-            log.error("Failed to serialize message payload of type {}", messageType, e);
-            return null;
-        }
+        }).runSubscriptionOn(Infrastructure.getDefaultWorkerPool());
     }
 }

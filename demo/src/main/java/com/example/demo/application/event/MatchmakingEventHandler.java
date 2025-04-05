@@ -1,6 +1,7 @@
 package com.example.demo.application.event;
 
 import com.example.demo.application.command.CreateGameCommand;
+import com.example.demo.application.dto.ErrorResponseDto;
 import com.example.demo.application.dto.InQueueResponseDto;
 import com.example.demo.application.dto.MatchFoundResponseDto;
 import com.example.demo.application.dto.PlayerDto;
@@ -16,7 +17,7 @@ import com.example.demo.infrastructure.websocket.service.WebSocketMessageService
 
 import io.smallrye.mutiny.Uni;
 import io.smallrye.mutiny.tuples.Tuple2;
-import io.smallrye.mutiny.tuples.Tuple3;
+import lombok.AllArgsConstructor;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import java.util.List;
@@ -30,125 +31,140 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class MatchmakingEventHandler {
 
-    private final WebSocketMessageService wesocketMessageService;
-    private final CreateGameCommandHandler createGameCommandHandler;
-    private final PlayerRepository playerRepository;
+	private final WebSocketMessageService websocketMessageService;
+	private final CreateGameCommandHandler createGameCommandHandler;
+	private final PlayerRepository playerRepository;
 
-    @Async
-    @EventListener
-    public void handlePlayerJoinedMatchmaking(PlayerJoinedEvent event) {
-        log.info("Player {} joined matchmaking", event.getPlayerId());
-        var response = InQueueResponseDto.builder()
-                .message("You have joined the matchmaking queue")
-                .build();
+	@Async
+	@EventListener
+	public void handlePlayerJoinedMatchmaking(PlayerJoinedEvent event) {
+		log.info("Player {} joined matchmaking", event.getPlayerId());
 
-        wesocketMessageService.sendToPlayer(event.getPlayerId(), "IN_QUEUE", response);
-    }
+		var response = InQueueResponseDto.builder()
+				.message("You have joined the matchmaking queue")
+				.build();
 
-    @Async
-    @EventListener
-    public void handlePlayerMatched(PlayerMatchedEvent event) {
-        log.info("Players {} and {} matched", event.getPlayer1Id(), event.getPlayer2Id());
+		websocketMessageService.sendToPlayer(event.getPlayerId(), "IN_QUEUE", response);
+	}
 
-        List<PlayerId> playerIds = List.of(event.getPlayer1Id(), event.getPlayer2Id());
-        CreateGameCommand command = new CreateGameCommand(event.getGameId(), playerIds);
+	@Async
+	@EventListener
+	public void handlePlayerMatched(PlayerMatchedEvent event) {
+		log.info("Players {} and {} matched", event.getPlayer1Id(), event.getPlayer2Id());
 
-        playerRepository.findAllByIds(playerIds)
-                .flatMap(players -> createGameCommandHandler.handle(command)
-                        .map(game -> Tuple2.of(game, players)))
-                .flatMap(tuple -> {
-                    Game game = tuple.getItem1();
-                    List<Player> players = tuple.getItem2();
+		List<PlayerId> playerIds = List.of(event.getPlayer1Id(), event.getPlayer2Id());
+		CreateGameCommand command = new CreateGameCommand(event.getGameId(), playerIds);
 
-                    return processMatch(game, players, event);
-                })
-                .subscribe().with(
-                        success -> log.info(
-                                "Successfully processed match for players {} and {}",
-                                event.getPlayer1Id(), event.getPlayer2Id()),
-                        error -> log.error("Error processing player match", error));
-    }
+		createMatchAndNotifyPlayers(playerIds, command, event)
+				.subscribe().with(
+						success -> log.info(
+								"Successfully processed match for players {} and {}",
+								event.getPlayer1Id(), event.getPlayer2Id()),
+						error -> {
+							log.error("Error processing player match", error);
+							ErrorResponseDto commandError = new ErrorResponseDto("Failed to create game");
+							websocketMessageService.sendToPlayers(playerIds, "ERROR", commandError);
+						});
+	}
 
-    private Uni<Void> processMatch(Game game, List<Player> playerList, PlayerMatchedEvent event) {
-        // Find players reactively with error handling
-        Uni<Player> player1Uni = Uni.createFrom().item(() -> playerList.stream()
-                .filter(p -> p.getId().equals(event.getPlayer1Id()))
-                .findFirst()
-                .orElse(null)).onItem().ifNull()
-                .failWith(() -> new IllegalStateException("Player 1 not found"));
+	private Uni<Void> createMatchAndNotifyPlayers(List<PlayerId> playerIds, CreateGameCommand command,
+			PlayerMatchedEvent event) {
+		return playerRepository.findAllByIds(playerIds)
+				.flatMap(players -> createGameCommandHandler.handle(command)
+						.map(game -> Tuple2.of(game, players)))
+				.flatMap(tuple -> processMatch(tuple.getItem1(), tuple.getItem2(), event));
+	}
 
-        Uni<Player> player2Uni = Uni.createFrom().item(() -> playerList.stream()
-                .filter(p -> p.getId().equals(event.getPlayer2Id()))
-                .findFirst()
-                .orElse(null)).onItem().ifNull()
-                .failWith(() -> new IllegalStateException("Player 2 not found"));
+	private Uni<Void> processMatch(Game game, List<Player> playerList, PlayerMatchedEvent event) {
+		return findPlayersFromList(playerList, event)
+				.flatMap(playerTuple -> assignPlayerTypes(game, playerTuple))
+				.flatMap(this::savePlayers)
+				.flatMap(this::notifyPlayers);
+	}
 
-        // Combine players and then process
-        return Uni.combine().all().unis(player1Uni, player2Uni)
-                .asTuple()
-                .flatMap(tuple -> {
-                    Player player1 = tuple.getItem1();
-                    Player player2 = tuple.getItem2();
+	private Uni<Tuple2<Player, Player>> findPlayersFromList(List<Player> playerList, PlayerMatchedEvent event) {
+		return Uni.combine().all().unis(
+				findPlayerById(playerList, event.getPlayer1Id(), "Player 1"),
+				findPlayerById(playerList, event.getPlayer2Id(), "Player 2")).asTuple();
+	}
 
-                    // Assign player types
-                    if (game.getCurrentPlayerMoveId().equals(player1.getId())) {
-                        player1.setPlayerType(PlayerType.O);
-                        player2.setPlayerType(PlayerType.X);
-                    } else {
-                        player1.setPlayerType(PlayerType.X);
-                        player2.setPlayerType(PlayerType.O);
-                    }
+	private Uni<Player> findPlayerById(List<Player> playerList, PlayerId id, String playerLabel) {
+		return Uni.createFrom().item(() -> playerList.stream()
+				.filter(p -> p.getId().equals(id))
+				.findFirst()
+				.orElse(null)).onItem().ifNull()
+				.failWith(() -> new IllegalStateException(playerLabel + " not found"));
+	}
 
-                    // Save both players reactively
-                    return Uni.combine().all()
-                            .unis(
-                                    playerRepository.save(player1),
-                                    playerRepository.save(player2))
-                            .asTuple()
-                            .map(savedTuple -> Tuple3.of(game, savedTuple.getItem1(),
-                                    savedTuple.getItem2()));
-                })
-                .flatMap(tuple -> {
-                    Game savedGame = tuple.getItem1();
-                    Player savedPlayer1 = tuple.getItem2();
-                    Player savedPlayer2 = tuple.getItem3();
+	private Uni<GameWithPlayers> assignPlayerTypes(Game game, Tuple2<Player, Player> playerTuple) {
+		Player player1 = playerTuple.getItem1();
+		Player player2 = playerTuple.getItem2();
 
-                    log.info("Game {} created with players {} and {}", savedGame.getId(),
-                            savedPlayer1.getPlayerType(), savedPlayer2.getPlayerType());
-                    // Send match notifications to both players
-                    return Uni.combine().all().unis(
-                            Uni.createFrom().item(() -> {
-                                sendPersonalizedMatchResponse(savedGame, savedPlayer1,
-                                        savedPlayer2);
-                                return null;
-                            }),
-                            Uni.createFrom().item(() -> {
-                                sendPersonalizedMatchResponse(savedGame, savedPlayer2,
-                                        savedPlayer1);
-                                return null;
-                            })).asTuple().replaceWithVoid();
-                });
-    }
+		boolean player1GoesFirst = game.getCurrentPlayerMoveId().equals(player1.getId());
+		player1.setPlayerType(player1GoesFirst ? PlayerType.O : PlayerType.X);
+		player2.setPlayerType(player1GoesFirst ? PlayerType.X : PlayerType.O);
 
-    private void sendPersonalizedMatchResponse(Game game, Player player, Player opponent) {
-        var dto = MatchFoundResponseDto.builder()
-                .gameId(game.getId().getId().toString())
-                .gameState(game.getState())
-                .board(game.getBoard())
-                .moves(game.getMoves())
-                .currentPlayerMoveId(game.getCurrentPlayerMoveId().getId().toString())
-                .you(PlayerDto.builder()
-                        .playerId(player.getId().getId())
-                        .username(player.getUsername().getUsername())
-                        .playerType(player.getPlayerType())
-                        .build())
-                .opponent(PlayerDto.builder()
-                        .playerId(opponent.getId().getId())
-                        .username(opponent.getUsername().getUsername())
-                        .playerType(opponent.getPlayerType())
-                        .build())
-                .build();
+		return Uni.createFrom().item(new GameWithPlayers(game, player1, player2));
+	}
 
-        wesocketMessageService.sendToPlayer(player.getId(), "MATCH_FOUND", dto);
-    }
+	private Uni<GameWithPlayers> savePlayers(GameWithPlayers gameWithPlayers) {
+		return Uni.combine().all().unis(
+				playerRepository.save(gameWithPlayers.player1),
+				playerRepository.save(gameWithPlayers.player2))
+				.asTuple().map(tuple -> new GameWithPlayers(
+						gameWithPlayers.game,
+						tuple.getItem1(),
+						tuple.getItem2()));
+	}
+
+	private Uni<Void> notifyPlayers(GameWithPlayers gameWithPlayers) {
+		Game game = gameWithPlayers.game;
+		Player player1 = gameWithPlayers.player1;
+		Player player2 = gameWithPlayers.player2;
+
+		log.info("Game {} created with players {} and {}", game.getId(),
+				player1.getPlayerType(), player2.getPlayerType());
+
+		MatchFoundResponseDto player1Dto = createMatchResponseDto(game, player1, player2);
+		MatchFoundResponseDto player2Dto = createMatchResponseDto(game, player2, player1);
+
+		return Uni.combine().all().unis(
+				Uni.createFrom().item(() -> {
+					websocketMessageService.sendToPlayer(player1.getId(), "MATCH_FOUND",
+							player1Dto);
+					return null;
+				}),
+				Uni.createFrom().item(() -> {
+					websocketMessageService.sendToPlayer(player2.getId(), "MATCH_FOUND",
+							player2Dto);
+					return null;
+				})).asTuple().replaceWithVoid();
+	}
+
+	private MatchFoundResponseDto createMatchResponseDto(Game game, Player player, Player opponent) {
+		return MatchFoundResponseDto.builder()
+				.gameId(game.getId().getId().toString())
+				.gameState(game.getState())
+				.board(game.getBoard())
+				.moves(game.getMoves())
+				.currentPlayerMoveId(game.getCurrentPlayerMoveId().getId().toString())
+				.you(PlayerDto.builder()
+						.playerId(player.getId().getId())
+						.username(player.getUsername().getUsername())
+						.playerType(player.getPlayerType())
+						.build())
+				.opponent(PlayerDto.builder()
+						.playerId(opponent.getId().getId())
+						.username(opponent.getUsername().getUsername())
+						.playerType(opponent.getPlayerType())
+						.build())
+				.build();
+	}
+
+	@AllArgsConstructor
+	private static class GameWithPlayers {
+		private final Game game;
+		private final Player player1;
+		private final Player player2;
+	}
 }

@@ -12,4 +12,5 @@ import lombok.NoArgsConstructor;
 public class CreatePlayerRequest {
 
     private Username username;
+    private String password;
 }

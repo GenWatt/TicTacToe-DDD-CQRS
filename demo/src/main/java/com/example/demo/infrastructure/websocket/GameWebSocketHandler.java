@@ -1,6 +1,7 @@
 package com.example.demo.infrastructure.websocket;
 
 import com.example.demo.infrastructure.websocket.message.MessageType;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -24,7 +25,18 @@ public class GameWebSocketHandler extends TextWebSocketHandler {
 
     @Override
     public void afterConnectionEstablished(WebSocketSession session) {
-        dispatch(session, "Connection established", MessageType.CONNECTION_ESTABLISHED);
+        Object playerIdObj = session.getAttributes().get("playerId");
+
+        if (playerIdObj != null) {
+            dispatch(session, "Connection established", MessageType.CONNECTION_ESTABLISHED);
+        } else {
+            log.error("Connection established but no player ID found in session attributes");
+            try {
+                session.close(CloseStatus.POLICY_VIOLATION.withReason("Authentication required"));
+            } catch (IOException e) {
+                log.error("Error closing unauthenticated session", e);
+            }
+        }
     }
 
     @Override
@@ -40,7 +52,6 @@ public class GameWebSocketHandler extends TextWebSocketHandler {
 
         try {
             MessageType messageType = determineMessageType(payload);
-
             dispatch(session, payload, messageType);
         } catch (Exception e) {
             log.error("Error processing message: {}", payload, e);
@@ -51,17 +62,18 @@ public class GameWebSocketHandler extends TextWebSocketHandler {
     private void dispatch(WebSocketSession session, String payload, MessageType messageType) {
         log.info("Dispatching message of type {}: {}", messageType, payload);
 
-        try {
-            messageDispatcher.dispatch(session, payload, messageType);
-        } catch (Exception e) {
-            log.error("Error dispatching message", e);
-            sessionService.sendErrorMessage(session, e.getMessage());
-        }
+        messageDispatcher.dispatch(session, payload, messageType)
+                .onFailure().invoke(error -> {
+                    log.error("Error dispatching message: {}", error.getMessage());
+                    sessionService.sendErrorMessage(session,
+                            "Server error processing " + messageType + ": " + error.getMessage());
+                })
+                .subscribeAsCompletionStage();
     }
 
     private MessageType determineMessageType(String payload) throws IOException {
         Map<String, Object> jsonMap = objectMapper.readValue(payload,
-                new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {
+                new TypeReference<Map<String, Object>>() {
                 });
 
         Object typeObj = jsonMap.get("type");

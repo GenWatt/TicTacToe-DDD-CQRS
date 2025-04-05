@@ -6,6 +6,7 @@ import org.springframework.web.socket.WebSocketSession;
 import com.example.demo.infrastructure.websocket.WebSocketSessionService;
 import com.example.demo.infrastructure.websocket.message.MessageType;
 
+import io.smallrye.mutiny.Uni;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -18,9 +19,10 @@ public class ConnectionEstablisedHandler implements WebSocketMessageHandler {
     private final WebSocketSessionService sessionService;
 
     @Override
-    public void handle(WebSocketSession session, String payload) {
-        sessionService.registerSession(session);
-        log.info("WebSocket connection established: {}", session.getId());
+    public Uni<Void> handle(WebSocketSession session, String payload) {
+        return sessionService.registerSession(session)
+                .onItem().invoke(() -> log.info("WebSocket connection established: {}", session.getId()))
+                .replaceWithVoid();
     }
 
     @Override

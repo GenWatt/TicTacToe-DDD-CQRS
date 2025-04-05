@@ -8,20 +8,22 @@ import org.springframework.web.socket.config.annotation.WebSocketHandlerRegistry
 import org.springframework.web.socket.server.standard.ServerEndpointExporter;
 
 import com.example.demo.infrastructure.websocket.GameWebSocketHandler;
+import com.example.demo.infrastructure.websocket.WebSocketAuthInterceptor;
+
+import lombok.RequiredArgsConstructor;
 
 @Configuration
 @EnableWebSocket
+@RequiredArgsConstructor
 public class WebSocketConfig implements WebSocketConfigurer {
 
     private final GameWebSocketHandler gameWebSocketHandler;
-
-    public WebSocketConfig(GameWebSocketHandler gameWebSocketHandler) {
-        this.gameWebSocketHandler = gameWebSocketHandler;
-    }
+    private final WebSocketAuthInterceptor webSocketAuthInterceptor;
 
     @Override
     public void registerWebSocketHandlers(WebSocketHandlerRegistry registry) {
         registry.addHandler(gameWebSocketHandler, "/ws/game")
+                .addInterceptors(webSocketAuthInterceptor)
                 .setAllowedOrigins("*");
     }
 

@@ -11,6 +11,7 @@ import com.example.demo.infrastructure.presistence.entity.PlayerEntity;
 public class PlayerMapper {
     public Player toDomain(PlayerEntity entity) {
         Player player = Player.reconstruct(entity.getId(), entity.getUsername(), entity.getPlayerType(),
+                entity.getPassword(),
                 new ArrayList<>(), entity.getCreatedAt(), entity.getUpdatedAt());
         return player;
     }
@@ -21,6 +22,7 @@ public class PlayerMapper {
                 .username(player.getUsername())
                 .createdAt(player.getCreatedAt())
                 .updatedAt(player.getUpdatedAt())
+                .password(player.getPassword())
                 .playerType(player.getPlayerType())
                 .games(new ArrayList<>())
                 .build();

@@ -6,6 +6,7 @@ import com.example.demo.infrastructure.websocket.WebSocketSessionService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import io.smallrye.mutiny.Uni;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -18,15 +19,31 @@ public abstract class AbstractMessageHandler<T> implements WebSocketMessageHandl
     private final Class<T> messageClass;
 
     @Override
-    public void handle(WebSocketSession session, String payload) {
-        try {
-            T message = objectMapper.readValue(payload, messageClass);
-            handleMessage(session, message);
-        } catch (JsonProcessingException e) {
-            log.error("Error processing message: {}", payload, e);
-            sessionService.sendErrorMessage(session, "Invalid message format: " + e.getMessage());
-        }
+    public Uni<Void> handle(WebSocketSession session, String payload) {
+        return convertPayload(payload)
+                .onItem().transformToUni(message -> handleMessage(session, message))
+                .onFailure().invoke(error -> {
+                    log.error("Error handling message: {}", error.getMessage());
+                    sessionService.sendErrorMessage(session, "Error parsing message: " + error.getMessage());
+                });
     }
 
-    protected abstract void handleMessage(WebSocketSession session, T message);
+    /**
+     * Convert the payload to the required message type
+     */
+    protected Uni<T> convertPayload(String payload) {
+        return Uni.createFrom().item(() -> {
+            try {
+                return objectMapper.readValue(payload, messageClass);
+            } catch (JsonProcessingException e) {
+                log.error("Failed to parse message payload: {}", e.getMessage());
+                throw new IllegalArgumentException("Invalid message format", e);
+            }
+        });
+    }
+
+    /**
+     * Handle the typed message
+     */
+    protected abstract Uni<Void> handleMessage(WebSocketSession session, T message);
 }

@@ -1,10 +1,11 @@
 package com.example.demo.application.service;
 
 import com.example.demo.domain.repository.GameRepository;
-import com.example.demo.domain.service.GameService;
 import com.example.demo.domain.valueObject.GameId;
 import com.example.demo.domain.valueObject.Move;
 import com.example.demo.domain.valueObject.PlayerId;
+import com.example.demo.infrastructure.websocket.service.GameService;
+
 import io.smallrye.mutiny.Uni;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

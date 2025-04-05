@@ -5,13 +5,13 @@ import com.example.demo.domain.valueObject.PlayerId;
 import com.example.demo.infrastructure.websocket.message.WebSocketResponse;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import io.smallrye.mutiny.Uni;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
 
-import java.io.IOException;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -25,71 +25,91 @@ public class WebSocketSessionService {
     private final Map<String, PlayerId> sessionToPlayerId = new ConcurrentHashMap<>();
     private final Map<PlayerId, WebSocketSession> playerIdToSession = new ConcurrentHashMap<>();
 
-    public void registerSession(WebSocketSession session) {
-        log.info("Registering WebSocket session: {}", session.getId());
-        sessions.put(session.getId(), session);
+    public Uni<Void> registerSession(WebSocketSession session) {
+        return Uni.createFrom().item(() -> {
+            log.info("Registering WebSocket session: {}", session.getId());
+            sessions.put(session.getId(), session);
+            return null;
+        });
     }
 
-    public void registerPlayer(WebSocketSession session, PlayerId playerId) {
-        String sessionId = session.getId();
-
-        sessionToPlayerId.put(sessionId, playerId);
-        playerIdToSession.put(playerId, session);
-        log.info("Player {} registered with session {}", playerId, sessionId);
+    public Uni<Void> registerPlayer(WebSocketSession session, PlayerId playerId) {
+        return Uni.createFrom().item(() -> {
+            String sessionId = session.getId();
+            sessionToPlayerId.put(sessionId, playerId);
+            playerIdToSession.put(playerId, session);
+            log.info("Player {} registered with session {}", playerId, sessionId);
+            return null;
+        });
     }
 
-    public void removeSession(WebSocketSession session) {
-        String sessionId = session.getId();
-        PlayerId playerId = sessionToPlayerId.get(sessionId);
+    public Uni<Void> removeSession(WebSocketSession session) {
+        return Uni.createFrom().item(() -> {
+            String sessionId = session.getId();
+            PlayerId playerId = sessionToPlayerId.get(sessionId);
 
-        if (playerId != null) {
-            playerIdToSession.remove(playerId);
-            sessionToPlayerId.remove(sessionId);
-            log.info("Player {} unregistered from session {}", playerId, sessionId);
-        }
+            if (playerId != null) {
+                playerIdToSession.remove(playerId);
+                sessionToPlayerId.remove(sessionId);
+                log.info("Player {} unregistered from session {}", playerId, sessionId);
+            }
 
-        sessions.remove(sessionId);
-        log.info("WebSocket session removed: {}", sessionId);
+            sessions.remove(sessionId);
+            log.info("WebSocket session removed: {}", sessionId);
+            return null;
+        });
     }
 
-    public PlayerId getPlayerIdBySession(WebSocketSession session) {
-        return sessionToPlayerId.get(session.getId());
+    public Uni<PlayerId> getPlayerIdBySession(WebSocketSession session) {
+        return Uni.createFrom().item(() -> sessionToPlayerId.get(session.getId()));
     }
 
-    public WebSocketSession getSessionByPlayerId(PlayerId playerId) {
-        return playerIdToSession.get(playerId);
+    public Uni<WebSocketSession> getSessionByPlayerId(PlayerId playerId) {
+        return Uni.createFrom().item(() -> playerIdToSession.get(playerId));
     }
 
-    public void sendErrorMessage(WebSocketSession session, String errorMessage) {
+    public Uni<Void> sendErrorMessage(WebSocketSession session, String errorMessage) {
         ErrorResponseDto errorResponse = ErrorResponseDto.builder()
                 .message(errorMessage)
                 .build();
 
-        try {
-            String json = objectMapper.writeValueAsString(errorResponse);
-            sendMessage(session, new WebSocketResponse("ERROR", json));
-        } catch (Exception e) {
-            log.error("Failed to send error message to session: {}", session.getId(), e);
-        }
-    }
-
-    public void sendMessage(WebSocketSession session, WebSocketResponse message) {
-        if (session.isOpen()) {
+        return Uni.createFrom().item(() -> {
             try {
-                String json = objectMapper.writeValueAsString(message);
-                session.sendMessage(new TextMessage(json));
-            } catch (IOException e) {
-                log.error("Failed to send message to session: {}", session.getId(), e);
+                String json = objectMapper.writeValueAsString(errorResponse);
+                return new WebSocketResponse("ERROR", json);
+            } catch (Exception e) {
+                log.error("Failed to create error message for session: {}", session.getId(), e);
+                throw new RuntimeException("Failed to create error message", e);
             }
-        }
+        }).chain(response -> sendMessage(session, response));
     }
 
-    public void sendToPlayer(PlayerId playerId, WebSocketResponse message) {
-        WebSocketSession session = getSessionByPlayerId(playerId);
-        if (session != null) {
-            sendMessage(session, message);
-        } else {
-            log.warn("No session found for player: {}", playerId);
-        }
+    public Uni<Void> sendMessage(WebSocketSession session, WebSocketResponse message) {
+        return Uni.createFrom().item(() -> {
+            if (session.isOpen()) {
+                try {
+                    String json = objectMapper.writeValueAsString(message);
+                    session.sendMessage(new TextMessage(json));
+                } catch (Exception e) {
+                    log.error("Failed to send message to session: {}", session.getId(), e);
+                    throw new RuntimeException("Failed to send message", e);
+                }
+            } else {
+                log.warn("Attempted to send message to closed session: {}", session.getId());
+            }
+            return null;
+        });
+    }
+
+    public Uni<Void> sendToPlayer(PlayerId playerId, WebSocketResponse message) {
+        return getSessionByPlayerId(playerId)
+                .onItem().ifNotNull().transformToUni(session -> {
+                    log.info("Sending message to player {}: {}", playerId, message);
+                    return sendMessage(session, message);
+                })
+                .onItem().ifNull().continueWith(() -> {
+                    log.warn("No session found for player: {}", playerId);
+                    return null;
+                });
     }
 }

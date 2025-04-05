@@ -38,6 +38,8 @@ public class PlayerEntity {
     @Embedded
     private Username username;
 
+    private String password;
+
     @Column(name = "created_at")
     private LocalDateTime createdAt;
 

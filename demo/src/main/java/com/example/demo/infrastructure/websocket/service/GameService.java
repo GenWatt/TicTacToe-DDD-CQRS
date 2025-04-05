@@ -1,4 +1,4 @@
-package com.example.demo.domain.service;
+package com.example.demo.infrastructure.websocket.service;
 
 import com.example.demo.domain.valueObject.GameId;
 import com.example.demo.domain.valueObject.Move;
