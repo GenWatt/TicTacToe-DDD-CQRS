@@ -44,7 +44,11 @@ public class MatchmakingEventHandler {
 				.message("You have joined the matchmaking queue")
 				.build();
 
-		websocketMessageService.sendToPlayer(event.getPlayerId(), "IN_QUEUE", response);
+		websocketMessageService.sendToPlayer(event.getPlayerId(), "IN_QUEUE", response)
+				.subscribe().with(
+						success -> log.info("Successfully sent IN_QUEUE message to player {}", event.getPlayerId()),
+						failure -> log.error("Failed to send IN_QUEUE message to player {}", event.getPlayerId(),
+								failure));
 	}
 
 	@Async
@@ -128,17 +132,13 @@ public class MatchmakingEventHandler {
 		MatchFoundResponseDto player1Dto = createMatchResponseDto(game, player1, player2);
 		MatchFoundResponseDto player2Dto = createMatchResponseDto(game, player2, player1);
 
-		return Uni.combine().all().unis(
-				Uni.createFrom().item(() -> {
-					websocketMessageService.sendToPlayer(player1.getId(), "MATCH_FOUND",
-							player1Dto);
-					return null;
-				}),
-				Uni.createFrom().item(() -> {
-					websocketMessageService.sendToPlayer(player2.getId(), "MATCH_FOUND",
-							player2Dto);
-					return null;
-				})).asTuple().replaceWithVoid();
+		// Add a small delay to ensure WebSocket sessions are properly registered
+		return Uni.createFrom().voidItem()
+				.onItem().delayIt().by(java.time.Duration.ofMillis(50))
+				.chain(() -> Uni.combine().all().unis(
+						websocketMessageService.sendToPlayer(player1.getId(), "MATCH_FOUND", player1Dto),
+						websocketMessageService.sendToPlayer(player2.getId(), "MATCH_FOUND", player2Dto))
+						.discardItems());
 	}
 
 	private MatchFoundResponseDto createMatchResponseDto(Game game, Player player, Player opponent) {

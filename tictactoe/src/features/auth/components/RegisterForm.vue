@@ -7,6 +7,7 @@
         id="username" 
         v-model="username" 
         required 
+        placeholder="Enter your username"
         class="form-control"
         autocomplete="username"
       />
@@ -19,6 +20,7 @@
         type="password" 
         id="password" 
         v-model="password" 
+        placeholder="Enter your password"
         required 
         class="form-control" 
         autocomplete="new-password"

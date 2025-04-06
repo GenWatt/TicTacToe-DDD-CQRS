@@ -17,6 +17,7 @@ public class FlywayConfiguration {
 
     @Bean
     DataSource flywayDataSource() {
+        System.out.println("Creating Flyway DataSource");
         return DataSourceBuilder.create()
                 .url(env.getRequiredProperty("spring.datasource.url"))
                 .username(env.getRequiredProperty("spring.datasource.username"))

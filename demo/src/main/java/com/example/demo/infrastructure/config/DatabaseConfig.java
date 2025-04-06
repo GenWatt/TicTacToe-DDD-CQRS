@@ -6,8 +6,10 @@ import io.vertx.sqlclient.Pool;
 import io.vertx.sqlclient.PoolOptions;
 import jakarta.persistence.Persistence;
 
+import java.util.HashMap;
+import java.util.Map;
+
 import org.hibernate.reactive.mutiny.Mutiny;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.DependsOn;
@@ -15,21 +17,25 @@ import org.springframework.context.annotation.DependsOn;
 @Configuration
 public class DatabaseConfig {
 
-    @Value("${spring.datasource.url:jdbc:postgresql://localhost:5432/gamedb}")
-    private String jdbcUrl;
+    private String jdbcUrl = System.getenv("SPRING_DATASOURCE_URL") != null ? System.getenv("SPRING_DATASOURCE_URL")
+            : "jdbc:postgresql://localhost:5432/postgres";
 
-    @Value("${spring.datasource.username:postgres}")
-    private String username;
+    private String username = System.getenv("SPRING_DATASOURCE_USERNAME") != null
+            ? System.getenv("SPRING_DATASOURCE_USERNAME")
+            : "postgres";
 
-    @Value("${spring.datasource.password:postgres}")
-    private String password;
+    private String password = System.getenv("SPRING_DATASOURCE_PASSWORD") != null
+            ? System.getenv("SPRING_DATASOURCE_PASSWORD")
+            : "postgres";
 
     @Bean
     Pool pgPool() {
+        System.out.println("Creating PostgreSQL connection pool with JDBC URL: " + jdbcUrl);
         String host = extractHostFromJdbcUrl(jdbcUrl);
         int port = extractPortFromJdbcUrl(jdbcUrl);
         String database = extractDatabaseFromJdbcUrl(jdbcUrl);
-
+        System.out.println("Creating PostgreSQL connection pool with host: " + host + ", port: " + port + ", database: "
+                + database);
         PgConnectOptions connectOptions = new PgConnectOptions()
                 .setHost(host)
                 .setPort(port)
@@ -40,7 +46,7 @@ public class DatabaseConfig {
         PoolOptions poolOptions = new PoolOptions()
                 .setMaxSize(10)
                 .setMaxWaitQueueSize(10)
-                .setIdleTimeout(300000) // 5 minutes
+                .setIdleTimeout(5 * 60 * 1000) // 5 minutes
                 .setShared(true);
 
         return Pool.pool(Vertx.vertx(), connectOptions, poolOptions);
@@ -50,6 +56,20 @@ public class DatabaseConfig {
     @DependsOn("flyway")
     Mutiny.SessionFactory sessionFactory() {
         try {
+            // Create a map to hold all the properties
+            Map<String, Object> properties = new HashMap<>();
+
+            // Add the connection properties
+            properties.put("jakarta.persistence.jdbc.url", jdbcUrl);
+            properties.put("jakarta.persistence.jdbc.user", username);
+            properties.put("jakarta.persistence.jdbc.password", password);
+
+            // For Hibernate Reactive
+            properties.put("hibernate.connection.url", jdbcUrl);
+            properties.put("hibernate.connection.username", username);
+            properties.put("hibernate.connection.password", password);
+
+            System.out.println("Creating Hibernate SessionFactory with URL: " + jdbcUrl);
             return Persistence.createEntityManagerFactory("game-persistence-unit")
                     .unwrap(Mutiny.SessionFactory.class);
         } catch (Exception e) {

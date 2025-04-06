@@ -14,14 +14,13 @@ import RegisterForm from '../features/auth/components/RegisterForm.vue';
   max-width: 400px;
   margin: 40px auto;
   padding: 20px;
-  background-color: #fff;
+  background-color: #f9f9f920;
   border-radius: 8px;
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
 }
 
 h1 {
   text-align: center;
-  color: #333;
   margin-bottom: 20px;
 }
 </style>

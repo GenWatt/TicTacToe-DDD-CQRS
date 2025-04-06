@@ -30,17 +30,15 @@ public class WebSocketMessageService {
      * @param payload     The payload object (will be serialized to JSON)
      * @return Uni<Void> that completes when the message is sent
      */
-    public void sendToPlayer(PlayerId playerId, String messageType, Object payload) {
+    public Uni<Void> sendToPlayer(PlayerId playerId, String messageType, Object payload) {
         log.info("Preparing to send {} message to player {}", messageType, playerId);
-        createResponse(messageType, payload)
+
+        return createResponse(messageType, payload)
                 .flatMap(response -> sessionService.sendToPlayer(playerId, response))
+                .onItem().invoke(() -> log.debug("Successfully sent {} message to player {}", messageType, playerId))
                 .onFailure().invoke(error -> log.error("Failed to send {} message to player {}: {}",
                         messageType, playerId, error.getMessage()))
-                .onFailure().recoverWithNull()
-                .subscribe().with(
-                        success -> log.debug("Successfully sent {} message to player {}", messageType, playerId),
-                        error -> log.error("Error in subscription when sending to player {}: {}", playerId,
-                                error.getMessage()));
+                .onFailure().recoverWithNull(); // Return null on failure to complete the chain
     }
 
     /**
@@ -49,15 +47,20 @@ public class WebSocketMessageService {
      * @param playerIds   Collection of player IDs to send to
      * @param messageType The type of message
      * @param payload     The payload object (will be serialized to JSON)
+     * @return Uni<Void> that completes when messages are sent to all players
      */
-    public void sendToPlayers(Collection<PlayerId> playerIds, String messageType, Object payload) {
+    public Uni<Void> sendToPlayers(Collection<PlayerId> playerIds, String messageType, Object payload) {
         log.info("Preparing to send {} message to {} players", messageType, playerIds.size());
-        createResponse(messageType, payload)
+
+        return createResponse(messageType, payload)
                 .flatMap(response -> {
                     // Create a Uni for each player and combine them
                     return Uni.join().all(
                             playerIds.stream()
                                     .map(playerId -> sessionService.sendToPlayer(playerId, response)
+                                            .onItem()
+                                            .invoke(() -> log.debug("Sent {} message to player {}", messageType,
+                                                    playerId))
                                             .onFailure()
                                             .invoke(error -> log.error("Failed to send {} message to player {}: {}",
                                                     messageType, playerId, error.getMessage()))
@@ -66,10 +69,8 @@ public class WebSocketMessageService {
                             .andCollectFailures()
                             .replaceWithVoid();
                 })
-                .subscribe().with(
-                        success -> log.debug("Successfully sent {} message to all players", messageType),
-                        error -> log.error("Error in subscription when sending to multiple players: {}",
-                                error.getMessage()));
+                .onItem().invoke(() -> log.debug("Successfully sent {} message to all players", messageType))
+                .onFailure().invoke(error -> log.error("Error sending to multiple players: {}", error.getMessage()));
     }
 
     /**

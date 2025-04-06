@@ -1,6 +1,8 @@
 <template>
   <div class="game-container">
-    <div class="game-status">{{ viewModel.displayMessage }}</div>
+    <div class="game-status" v-if="viewModel.displayMessage.value">
+      {{ viewModel.displayMessage }}
+    </div>
     
     <div v-if="viewModel.errorMessage.value" class="error-message">
       {{ viewModel.errorMessage }}
@@ -37,10 +39,10 @@
 </template>
 
 <script setup lang="ts">
-import {  onMounted } from 'vue';
+import { onMounted } from 'vue';
 import Board from './Board.vue';
-import {  useGameViewModel } from '../features/game/viewModels/GameViewModel';
-import Button from './UI/Button.vue';
+import { useGameViewModel } from '../viewModels/GameViewModel';
+import Button from '../../../components/UI/Button.vue';
 
 const viewModel = useGameViewModel();
 
@@ -83,6 +85,7 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   align-items: center;
+  gap: 0.5rem;
 }
 
 .connection-status {

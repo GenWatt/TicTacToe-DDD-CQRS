@@ -23,7 +23,7 @@ public class GameEventHandler {
 
     @Async
     @EventListener
-    public void handleMovePlayedEvent(MovePlayedEvent event) throws JsonProcessingException {
+    public void handleMovePlayedEvent(MovePlayedEvent event) {
         log.info("Move played in game {}: Player {} moved to ({},{}), Next player: {}",
                 event.getGameId(), event.getPlayerId(), event.getMove().getX(), event.getMove().getY(),
                 event.getNextPlayerId());
@@ -33,7 +33,11 @@ public class GameEventHandler {
                 event.getMove(),
                 event.getNextPlayerId());
 
-        webSocketMessageService.sendToPlayers(event.getPlayerIds(), "PLAY_MOVE", responseDto);
+        webSocketMessageService.sendToPlayers(event.getPlayerIds(), "PLAY_MOVE", responseDto)
+                .subscribe().with(
+                        success -> log.info("Successfully sent PLAY_MOVE message to players {}", event.getPlayerIds()),
+                        failure -> log.error("Failed to send PLAY_MOVE message to players {}: {}",
+                                event.getPlayerIds(), failure.getMessage()));
     }
 
     @Async
@@ -60,6 +64,11 @@ public class GameEventHandler {
                 event.getWinnerId(),
                 event.getGame().getState());
 
-        webSocketMessageService.sendToPlayers(event.getGame().getPlayerIds(), "GAME_ENDED", responseDto);
+        webSocketMessageService.sendToPlayers(event.getGame().getPlayerIds(), "GAME_ENDED", responseDto)
+                .subscribe().with(
+                        success -> log.info("Successfully sent GAME_ENDED message to players {}",
+                                event.getGame().getPlayerIds()),
+                        failure -> log.error("Failed to send GAME_ENDED message to players {}: {}",
+                                event.getGame().getPlayerIds(), failure.getMessage()));
     }
 }

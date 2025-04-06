@@ -145,7 +145,6 @@ export function useWebSocketService(
         reconnectCount = 0;
     };
 
-    // Handle WebSocket close event
     const handleClose = (event: CloseEvent): void => {
         const wasConnected = isConnected.value;
         isConnected.value = false;
@@ -180,7 +179,7 @@ export function useWebSocketService(
 
     const handleError = (event: any): void => {
         if (event.target.readyState === WebSocket.CLOSED) {
-            console.error('WebSocket closed unexpectedly:', event);
+            console.log('WebSocket closed unexpectedly:', event);
             error.value = new Error('You are not authenticated. Please log in again.');
             return;
         }
@@ -195,15 +194,11 @@ export function useWebSocketService(
 
             lastMessage.value = { type: typeToEnum, payload: genericMessage.payload };
 
-            // Parse payload if it's a string
-            console.log('Received message:', genericMessage.payload);
-
             const payload = typeof genericMessage.payload === 'string' ?
                 JSON.parse(genericMessage.payload) :
                 genericMessage.payload;
 
             console.log('Parsed payload:', payload, typeof genericMessage.payload === 'string');
-            // Call registered handler for this message type
             const handler = messageHandlers.get(typeToEnum);
 
             if (handler) {

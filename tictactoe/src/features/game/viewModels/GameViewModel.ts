@@ -7,28 +7,25 @@ import {
   WebSocketPlayMovePayload,
   GameEndedPayload,
   WebSocketInQueueMessage,
-  WebSocketErrorMessagePayload
+  WebSocketErrorMessagePayload,
+  GameState
 } from '../../../types';
 import { webSocketService } from '../../../gameWebsocketService';
 
 export interface GameViewModel {
-  // State
   displayMessage: Ref<string>;
   inQueue: Ref<boolean>;
   errorMessage: Ref<string>;
   gameActive: Ref<boolean>;
 
-  // WebSocket service state
   isConnected: Ref<boolean>;
   isConnecting: Ref<boolean>;
 
-  // Computed properties
   matchmakingButtonText: Ref<string>;
   reconnectButtonText: Ref<string>;
   disconnectButtonText: Ref<string>;
   connectedText: Ref<string>;
 
-  // Methods
   initialize: () => void;
   connect: () => void;
   disconnect: () => void;
@@ -39,20 +36,17 @@ export function useGameViewModel(): GameViewModel {
   const gameStore = useGameStore();
   const authStore = useAuthStore();
 
-  // UI state
   const displayMessage = ref<string>('');
   const inQueue = ref<boolean>(false);
   const errorMessage = ref<string>('');
 
-  // Game state
-  const gameActive = computed(() => gameStore.board !== null);
+  const gameActive = computed(() => gameStore.getGameState() === GameState.IN_PROGRESS);
 
-  // UI computed properties
   const matchmakingButtonText = computed(() => {
     if (webSocketService.isConnecting.value) return 'Connecting...';
     if (inQueue.value) return 'Looking for opponent...';
     if (gameActive.value) return 'In Game';
-    return `Find Match (${authStore.username})`;
+    return `Find Match`;
   });
 
   const reconnectButtonText = computed(() => 'Reconnect');
@@ -62,7 +56,6 @@ export function useGameViewModel(): GameViewModel {
     return webSocketService.isConnected.value ? 'Connected to server' : 'Not connected to server';
   });
 
-  // Initialize the game
   const initialize = (): void => {
     registerWebSocketHandlers();
     registerDisconnectionHandler();
@@ -70,24 +63,20 @@ export function useGameViewModel(): GameViewModel {
     gameStore.resetGame();
   };
 
-  // Connect to WebSocket
   const connect = (): void => {
     console.log('Connecting to WebSocket...');
     webSocketService.connect(authStore.playerId, authStore.token);
   };
 
-  // Disconnect from WebSocket
   const disconnect = (): void => {
     console.log('Disconnecting from WebSocket...');
     webSocketService.disconnect();
 
-    // If in a game, handle the disconnect as a forfeit
     if (gameActive.value) {
       handleGameDisconnect();
     }
   };
 
-  // Handle game disconnection
   const handleGameDisconnect = (): void => {
     if (gameActive.value) {
       displayMessage.value = 'Game over! You lost due to connection problems.';
@@ -96,25 +85,20 @@ export function useGameViewModel(): GameViewModel {
     }
   };
 
-  // Register disconnection handler
   const registerDisconnectionHandler = (): void => {
-    // Register handler for unexpected disconnections
     webSocketService.registerDisconnectHandler(() => {
       if (gameActive.value) {
         handleGameDisconnect();
       }
     });
 
-    // Also watch the connected state to handle disconnections
     watch(webSocketService.isConnected, (connected, prevConnected) => {
       if (prevConnected && !connected && gameActive.value) {
-        // We were connected, then disconnected while in a game
         handleGameDisconnect();
       }
     });
   };
 
-  // Start matchmaking
   const handleMatchmaking = (): void => {
     if (!webSocketService.isConnected.value || gameActive.value) return;
 
@@ -128,7 +112,6 @@ export function useGameViewModel(): GameViewModel {
     webSocketService.sendMessage(message);
   };
 
-  // Setup error handling
   const setupErrorHandling = (): void => {
     watch(webSocketService.error, (error) => {
       if (error) {
@@ -142,7 +125,6 @@ export function useGameViewModel(): GameViewModel {
     });
   };
 
-  // Register WebSocket message handlers
   const registerWebSocketHandlers = (): void => {
     webSocketService.registerMessageHandler(
       WebSocketMessageType.IN_QUEUE,
@@ -178,7 +160,6 @@ export function useGameViewModel(): GameViewModel {
     )
   };
 
-  // Individual message handlers
   const handleInQueueMessage = (payload: WebSocketInQueueMessage['payload']): void => {
     displayMessage.value = payload.message;
   };
@@ -207,7 +188,6 @@ export function useGameViewModel(): GameViewModel {
   const handlePlayMoveMessage = (payload: WebSocketPlayMovePayload): void => {
     gameStore.playMove(payload);
 
-    // Update display message based on whose turn it is
     if (gameStore.isYourTurn()) {
       displayMessage.value = "It's your turn!";
     } else {
@@ -228,31 +208,25 @@ export function useGameViewModel(): GameViewModel {
 
     gameStore.resetGame();
 
-    // Reset queue state
     inQueue.value = false;
   };
 
-  // Setup error handling on creation
   setupErrorHandling();
 
   return {
-    // State
     displayMessage,
     inQueue,
     errorMessage,
     gameActive,
 
-    //webSocketService state
     isConnected: webSocketService.isConnected,
     isConnecting: webSocketService.isConnecting,
 
-    // Computed properties
     matchmakingButtonText,
     reconnectButtonText,
     disconnectButtonText,
     connectedText,
 
-    // Methods
     initialize,
     connect,
     disconnect,

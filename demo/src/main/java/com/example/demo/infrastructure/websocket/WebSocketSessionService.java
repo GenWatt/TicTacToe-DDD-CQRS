@@ -86,30 +86,31 @@ public class WebSocketSessionService {
 
     public Uni<Void> sendMessage(WebSocketSession session, WebSocketResponse message) {
         return Uni.createFrom().item(() -> {
-            if (session.isOpen()) {
-                try {
-                    String json = objectMapper.writeValueAsString(message);
-                    session.sendMessage(new TextMessage(json));
-                } catch (Exception e) {
-                    log.error("Failed to send message to session: {}", session.getId(), e);
-                    throw new RuntimeException("Failed to send message", e);
+            // Synchronize on the session object to prevent concurrent writes
+            synchronized (session) {
+                if (session.isOpen()) {
+                    try {
+                        String json = objectMapper.writeValueAsString(message);
+                        session.sendMessage(new TextMessage(json));
+                    } catch (Exception e) {
+                        log.error("Failed to send message to session: {}", session.getId(), e);
+                        throw new RuntimeException("Failed to send message", e);
+                    }
+                } else {
+                    log.warn("Attempted to send message to closed session: {}", session.getId());
                 }
-            } else {
-                log.warn("Attempted to send message to closed session: {}", session.getId());
             }
             return null;
         });
     }
 
     public Uni<Void> sendToPlayer(PlayerId playerId, WebSocketResponse message) {
+        System.out.println("2222222222222222222Sending message to player: " + playerId + ", message: " + message);
         return getSessionByPlayerId(playerId)
                 .onItem().ifNotNull().transformToUni(session -> {
                     log.info("Sending message to player {}: {}", playerId, message);
                     return sendMessage(session, message);
                 })
-                .onItem().ifNull().continueWith(() -> {
-                    log.warn("No session found for player: {}", playerId);
-                    return null;
-                });
+                .replaceWithVoid();
     }
 }

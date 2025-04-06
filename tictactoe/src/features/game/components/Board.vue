@@ -34,10 +34,10 @@
 
 <script setup lang="ts">
 import { storeToRefs } from 'pinia';
-import { useGameStore } from '../stores/useGameStore';
-import { useAuthStore } from '../stores/useAuthStore';
+import { useGameStore } from '../../../stores/useGameStore';
+import { useAuthStore } from '../../../stores/useAuthStore';
 import { ref } from 'vue';
-import { webSocketService } from '../gameWebsocketService';
+import { webSocketService } from '../../../gameWebsocketService';
 
 const gameStore = useGameStore();
 const authStore = useAuthStore();
@@ -140,7 +140,7 @@ const makeMove = async (row: number, col: number) => {
 .cell {
     width: 80px;
     height: 80px;
-    border: 1px solid #555;
+    border: 1px solid #eee;
     display: flex;
     justify-content: center;
     align-items: center;

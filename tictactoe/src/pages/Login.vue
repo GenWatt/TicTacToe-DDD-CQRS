@@ -23,7 +23,7 @@ import LoginForm from '../features/auth/components/LoginForm.vue';
   width: 100%;
   max-width: 400px;
   padding: 2rem;
-  background: white;
+  background: #f9f9f920;
   border-radius: 8px;
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
 }
@@ -31,6 +31,5 @@ import LoginForm from '../features/auth/components/LoginForm.vue';
 h1 {
   text-align: center;
   margin-bottom: 1.5rem;
-  color: #333;
 }
 </style>
